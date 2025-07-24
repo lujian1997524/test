@@ -12,3 +12,5 @@ export { StatusIndicator, StatusToggle } from './StatusIndicator'
 export type { StatusIndicatorProps, StatusToggleProps, StatusType } from './StatusIndicator'
 
 export { FileDropzone } from './FileDropzone'
+
+export { NotificationContainer, SSEConnectionIndicator } from './NotificationContainer'

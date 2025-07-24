@@ -1,9 +1,14 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Header } from './Header'
 import { Sidebar, SidebarItem } from './Sidebar'
+import { NotificationContainer, SSEConnectionIndicator } from '@/components/ui/NotificationContainer'
+import { useNotificationStore } from '@/stores/notificationStore'
+import { useProjectStore } from '@/stores'
+import { sseManager } from '@/utils/sseManager'
+import { useAuth } from '@/contexts/AuthContext'
 
 export interface MainLayoutProps {
   children: React.ReactNode
@@ -25,10 +30,70 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   className = ''
 }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true) // 默认在移动端折叠
+  const { connectSSE, disconnectSSE } = useNotificationStore()
+  const { fetchProjects } = useProjectStore()
+  const { token, isAuthenticated } = useAuth()
 
   const toggleSidebar = () => {
     setSidebarCollapsed(!sidebarCollapsed)
   }
+
+  // SSE连接管理
+  useEffect(() => {
+    if (isAuthenticated && token) {
+      console.log('🔌 初始化SSE连接...')
+      
+      // 建立SSE连接
+      connectSSE(token).then((success) => {
+        if (success) {
+          console.log('✅ SSE连接建立成功')
+        } else {
+          console.error('❌ SSE连接建立失败')
+        }
+      })
+
+      // 添加项目相关的SSE事件监听器
+      const handleProjectCreated = (data: any) => {
+        console.log('📋 收到项目创建事件:', data)
+        // 刷新项目列表
+        fetchProjects()
+      }
+
+      const handleProjectUpdated = (data: any) => {
+        console.log('🔄 收到项目更新事件:', data)
+        // 刷新项目列表
+        fetchProjects()
+      }
+
+      const handleProjectDeleted = (data: any) => {
+        console.log('🗑️ 收到项目删除事件:', data)
+        // 刷新项目列表
+        fetchProjects()
+      }
+
+      const handleProjectStatusChanged = (data: any) => {
+        console.log('📊 收到项目状态变更事件:', data)
+        // 刷新项目列表
+        fetchProjects()
+      }
+
+      // 注册事件监听器
+      sseManager.addEventListener('project-created', handleProjectCreated)
+      sseManager.addEventListener('project-updated', handleProjectUpdated)
+      sseManager.addEventListener('project-deleted', handleProjectDeleted)
+      sseManager.addEventListener('project-status-changed', handleProjectStatusChanged)
+
+      // 清理函数
+      return () => {
+        console.log('🔌 清理SSE连接...')
+        sseManager.removeEventListener('project-created', handleProjectCreated)
+        sseManager.removeEventListener('project-updated', handleProjectUpdated)
+        sseManager.removeEventListener('project-deleted', handleProjectDeleted)
+        sseManager.removeEventListener('project-status-changed', handleProjectStatusChanged)
+        disconnectSSE()
+      }
+    }
+  }, [isAuthenticated, token, connectSSE, disconnectSSE, fetchProjects])
 
   return (
     <div className={`min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 ${className}`}>
@@ -135,6 +200,12 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           </motion.div>
         </motion.div>
       )}
+
+      {/* 通知容器 */}
+      <NotificationContainer />
+      
+      {/* SSE连接状态指示器 */}
+      <SSEConnectionIndicator />
     </div>
   )
 }

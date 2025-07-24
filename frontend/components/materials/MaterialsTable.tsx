@@ -65,7 +65,7 @@ export const MaterialsTable = ({
   const [tempNotes, setTempNotes] = useState('');
   const { token, user } = useAuth();
   const { updateMaterialStatus } = useMaterialStore();
-  const { projects, updateProject } = useProjectStore();
+  const { projects, updateProject, fetchProjects } = useProjectStore();
 
   // 如果还没有加载厚度规格，先加载
   useEffect(() => {
@@ -73,6 +73,21 @@ export const MaterialsTable = ({
       fetchThicknessSpecs();
     }
   }, []);
+
+  // 监听材料更新事件，刷新项目数据
+  useEffect(() => {
+    const handleMaterialsUpdate = (event: CustomEvent) => {
+      console.log('📋 MaterialsTable 收到材料更新事件:', event.detail);
+      // 刷新项目数据以获取最新的材料状态
+      fetchProjects();
+    };
+
+    window.addEventListener('materials-updated', handleMaterialsUpdate as EventListener);
+    
+    return () => {
+      window.removeEventListener('materials-updated', handleMaterialsUpdate as EventListener);
+    };
+  }, [fetchProjects]);
 
   const fetchThicknessSpecs = async () => {
     try {
@@ -170,6 +185,9 @@ export const MaterialsTable = ({
       try {
         await updateProject(projectId, { status: newStatus as 'pending' | 'in_progress' | 'completed' | 'cancelled' });
         console.log(`项目 ${projectId} 状态更新成功`);
+        
+        // 注意：SSE事件将由后端的项目更新路由自动发送，不需要在前端重复发送
+        
       } catch (error) {
         console.error('更新项目状态失败:', error);
       }
@@ -210,8 +228,7 @@ export const MaterialsTable = ({
             return;
           }
         }
-        // 成功删除或本来就没有记录，立即更新项目状态
-        window.dispatchEvent(new CustomEvent('materials-updated'));
+        // 成功删除或本来就没有记录，项目状态会通过SSE事件自动更新
         await updateProjectStatusRealtime(projectId, thicknessSpecId, 'empty');
         return;
       }
@@ -267,8 +284,7 @@ export const MaterialsTable = ({
         }
       }
       
-      // 成功更新或创建后，立即更新项目状态
-      window.dispatchEvent(new CustomEvent('materials-updated'));
+      // 成功更新或创建后，项目状态会通过SSE事件自动更新
       await updateProjectStatusRealtime(projectId, thicknessSpecId, newStatus);
       
     } catch (error) {

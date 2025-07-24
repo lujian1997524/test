@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjectStore } from '@/stores';
@@ -38,13 +38,26 @@ export const ProjectTree: React.FC<ProjectTreeProps> = ({
 }) => {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['all']));
   
-  // 使用Zustand Store
-  const { projects, loading, fetchProjects } = useProjectStore();
+  // 使用Zustand Store（明确订阅完整状态）
+  const { projects, loading, fetchProjects: originalFetchProjects, lastUpdated } = useProjectStore();
 
-  // 获取项目列表
+  // 包装fetchProjects以避免依赖问题
+  const fetchProjects = useCallback(() => {
+    originalFetchProjects();
+  }, [originalFetchProjects]);
+
+  // 调试日志：监控projects变化
   useEffect(() => {
-    fetchProjects();
-  }, [fetchProjects, refreshTrigger]);
+    console.log('🌳 ProjectTree - projects数组变化:', projects.length, projects.map(p => p.name));
+    console.log('🌳 ProjectTree - lastUpdated:', lastUpdated);
+  }, [projects, lastUpdated]);
+
+  // 获取项目列表（仅在refreshTrigger变化时）
+  useEffect(() => {
+    if (refreshTrigger > 0) { // 只有当refreshTrigger > 0时才刷新
+      fetchProjects();
+    }
+  }, [refreshTrigger]);
 
   // 按状态分组项目
   const groupedProjects = {

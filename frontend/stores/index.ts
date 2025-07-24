@@ -2,6 +2,7 @@
 export { useProjectStore } from './projectStore';
 export { useMaterialStore } from './materialStore';
 export { useGlobalSyncStore } from './globalSyncStore';
+export { useNotificationStore } from './notificationStore';
 
 // 类型导出
 export type { 

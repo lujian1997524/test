@@ -11,6 +11,8 @@ import { DashboardModal } from '@/components/materials/DashboardModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjectStore, useMaterialStore } from '@/stores';
 import { SyncStatusIndicator } from '@/components/common/SyncManager';
+import { NotificationContainer } from '@/components/ui/NotificationContainer';
+import { useNotificationStore } from '@/stores/notificationStore';
 
 export default function Home() {
   return (
@@ -26,7 +28,8 @@ function HomeContent() {
   const [showThicknessSpecModal, setShowThicknessSpecModal] = useState(false);
   const [showDashboardModal, setShowDashboardModal] = useState(false);
   const [editingProject, setEditingProject] = useState<any>(null);
-  const { user, logout } = useAuth();
+  const { token, isAuthenticated, user, logout } = useAuth();
+  const { connectSSE, disconnectSSE } = useNotificationStore();
   
   // Zustand状态管理
   const { 
@@ -35,28 +38,14 @@ function HomeContent() {
     createProject,
     updateProject,
     deleteProject,
-    fetchProjects
+    fetchProjects,
+    setupSSEListeners
   } = useProjectStore();
   
   const { fetchMaterials } = useMaterialStore();
 
-  // 监听数据更新事件
+  // 监听数据更新事件（移除SSE相关的监听，由项目store统一处理）
   useEffect(() => {
-    const handleProjectCreated = () => {
-      fetchProjects(); // 重新获取项目列表
-    };
-
-    const handleProjectUpdated = () => {
-      fetchProjects(); // 重新获取项目列表
-    };
-
-    const handleProjectDeleted = (event: CustomEvent) => {
-      if (selectedProjectId === event.detail.id) {
-        setSelectedProjectId(null); // 如果删除的是当前查看的项目，返回列表
-      }
-      fetchProjects(); // 重新获取项目列表
-    };
-
     const handleMaterialUpdated = () => {
       // 如果有选中的项目，重新获取该项目的材料
       if (selectedProjectId) {
@@ -64,24 +53,50 @@ function HomeContent() {
       }
     };
 
-    // 监听全局事件
-    window.addEventListener('project-created', handleProjectCreated);
-    window.addEventListener('project-updated', handleProjectUpdated);
-    window.addEventListener('project-deleted', handleProjectDeleted as EventListener);
+    const handleProjectDeletedSSE = (event: CustomEvent) => {
+      // 如果删除的是当前查看的项目，返回列表
+      if (selectedProjectId === event.detail.id) {
+        setSelectedProjectId(null);
+      }
+    };
+
+    // 监听材料更新和SSE项目删除事件
     window.addEventListener('material-updated', handleMaterialUpdated);
+    window.addEventListener('project-deleted-sse', handleProjectDeletedSSE as EventListener);
 
     return () => {
-      window.removeEventListener('project-created', handleProjectCreated);
-      window.removeEventListener('project-updated', handleProjectUpdated);
-      window.removeEventListener('project-deleted', handleProjectDeleted as EventListener);
       window.removeEventListener('material-updated', handleMaterialUpdated);
+      window.removeEventListener('project-deleted-sse', handleProjectDeletedSSE as EventListener);
     };
-  }, [selectedProjectId, fetchProjects, fetchMaterials]);
+  }, [selectedProjectId, fetchMaterials]);
 
-  // 初始加载项目数据
+  // 初始加载项目数据并设置SSE监听（仅在组件挂载时执行一次）
   useEffect(() => {
+    console.log('🚀 初始化应用...');
+    // 先获取项目数据
     fetchProjects();
-  }, [fetchProjects]);
+    // 设置SSE监听器（重新启用）
+    setupSSEListeners();
+  }, []); // 使用空依赖数组，只在挂载时执行一次
+
+  // SSE连接管理
+  useEffect(() => {
+    if (isAuthenticated && token) {
+      console.log('🔌 建立SSE连接...');
+      connectSSE(token).then((success) => {
+        if (success) {
+          console.log('✅ SSE连接建立成功');
+        } else {
+          console.error('❌ SSE连接建立失败');
+        }
+      });
+
+      return () => {
+        console.log('🔌 断开SSE连接...');
+        disconnectSSE();
+      };
+    }
+  }, [isAuthenticated, token]); // 移除connectSSE和disconnectSSE依赖
 
   // 创建项目
   const handleCreateProject = async (projectData: any) => {
@@ -325,6 +340,9 @@ function HomeContent() {
         isOpen={showDashboardModal}
         onClose={() => setShowDashboardModal(false)}
       />
+
+      {/* 通知容器 */}
+      <NotificationContainer />
     </div>
   );
 }

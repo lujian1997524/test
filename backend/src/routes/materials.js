@@ -1,6 +1,7 @@
 const express = require('express');
 const { Material, ThicknessSpec, Project, Worker } = require('../models');
 const { authenticate, requireOperator } = require('../middleware/auth');
+const sseManager = require('../utils/sseManager');
 
 const router = express.Router();
 
@@ -139,6 +140,18 @@ router.post('/', authenticate, requireOperator, async (req, res) => {
       material: createdMaterial
     });
 
+    // 广播板材状态变更事件（创建新材料也算状态变更）
+    sseManager.broadcast('material-status-changed', {
+      material: createdMaterial,
+      oldStatus: 'empty', // 从空白状态
+      newStatus: createdMaterial.status, // 到新状态
+      projectId: createdMaterial.projectId,
+      projectName: createdMaterial.project?.name,
+      materialType: createdMaterial.thicknessSpec?.thickness + createdMaterial.thicknessSpec?.unit,
+      userName: req.user.name,
+      userId: req.user.id
+    }, req.user.id);
+
   } catch (error) {
     console.error('创建板材错误:', error);
     res.status(500).json({
@@ -212,6 +225,18 @@ router.put('/:id', authenticate, requireOperator, async (req, res) => {
       material: updatedMaterial
     });
 
+    // 广播板材状态变更事件（不触发通知弹窗）
+    sseManager.broadcast('material-status-changed', {
+      material: updatedMaterial,
+      oldStatus: material.status, // 原状态
+      newStatus: status, // 新状态
+      projectId: material.projectId,
+      projectName: material.project?.name,
+      materialType: material.thicknessSpec?.thickness + material.thicknessSpec?.unit,
+      userName: req.user.name,
+      userId: req.user.id
+    }, req.user.id);
+
   } catch (error) {
     console.error('更新板材状态错误:', error);
     console.error('错误详情:', {
@@ -229,12 +254,23 @@ router.put('/:id', authenticate, requireOperator, async (req, res) => {
   }
 });
 
-// 删除板材
+// 删除板材(改为空白状态)
 router.delete('/:id', authenticate, requireOperator, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const material = await Material.findByPk(id);
+    const material = await Material.findByPk(id, {
+      include: [
+        {
+          association: 'thicknessSpec',
+          attributes: ['thickness', 'unit']
+        },
+        {
+          association: 'project',
+          attributes: ['name']
+        }
+      ]
+    });
 
     if (!material) {
       return res.status(404).json({
@@ -242,11 +278,32 @@ router.delete('/:id', authenticate, requireOperator, async (req, res) => {
       });
     }
 
+    // 保存删除前的信息用于SSE广播
+    const deletedMaterialInfo = {
+      id: material.id,
+      projectId: material.projectId,
+      projectName: material.project?.name,
+      materialType: material.thicknessSpec?.thickness + material.thicknessSpec?.unit,
+      oldStatus: material.status
+    };
+
     await material.destroy();
 
     res.json({
       message: '板材删除成功'
     });
+
+    // 广播板材状态变更事件（删除材料相当于改为空白状态）
+    sseManager.broadcast('material-status-changed', {
+      material: { id: deletedMaterialInfo.id },
+      oldStatus: deletedMaterialInfo.oldStatus,
+      newStatus: 'empty', // 删除后变为空白状态
+      projectId: deletedMaterialInfo.projectId,
+      projectName: deletedMaterialInfo.projectName,
+      materialType: deletedMaterialInfo.materialType,
+      userName: req.user.name,
+      userId: req.user.id
+    }, req.user.id);
 
   } catch (error) {
     console.error('删除板材错误:', error);
@@ -292,6 +349,15 @@ router.put('/batch/status', authenticate, requireOperator, async (req, res) => {
       message: `成功更新 ${updatedCount} 个板材的状态`,
       updatedCount
     });
+
+    // 广播批量板材状态变更事件（不触发通知弹窗）
+    sseManager.broadcast('material-batch-status-changed', {
+      materialIds,
+      status,
+      updatedCount,
+      userName: req.user.name,
+      userId: req.user.id
+    }, req.user.id);
 
   } catch (error) {
     console.error('批量更新板材状态错误:', error);

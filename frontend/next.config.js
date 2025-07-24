@@ -2,10 +2,14 @@
 const nextConfig = {
   // API代理配置
   async rewrites() {
+    // 根据环境变量或请求来源动态设置后端地址
+    const backendHost = process.env.BACKEND_HOST || 'localhost';
+    const backendPort = process.env.BACKEND_PORT || '35001';
+    
     return [
       {
         source: '/api/:path*',
-        destination: 'http://localhost:35001/api/:path*'
+        destination: `http://${backendHost}:${backendPort}/api/:path*`
       }
     ]
   },

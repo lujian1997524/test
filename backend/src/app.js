@@ -18,12 +18,44 @@ const thicknessSpecsRoutes = require('./routes/thickness-specs');
 const drawingsRoutes = require('./routes/drawings');
 const dashboardRoutes = require('./routes/dashboard');
 const searchRoutes = require('./routes/search');
+const sseRoutes = require('./routes/sse');
 
 const app = express();
 
 // 中间件配置
 app.use(helmet());
-app.use(cors());
+
+// CORS配置 - 允许局域网内的跨域访问
+app.use(cors({
+  origin: function (origin, callback) {
+    // 允许同源请求 (origin为undefined)
+    if (!origin) return callback(null, true);
+    
+    // 允许localhost和127.0.0.1
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      return callback(null, true);
+    }
+    
+    // 允许局域网IP (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+    const url = new URL(origin);
+    const hostname = url.hostname;
+    
+    if (
+      /^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+      /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+      /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(hostname)
+    ) {
+      return callback(null, true);
+    }
+    
+    console.log('CORS blocked origin:', origin);
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'X-Requested-With']
+}));
+
 app.use(morgan('combined'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -55,7 +87,8 @@ app.get('/api', (req, res) => {
       thicknessSpecs: '/api/thickness-specs',
       drawings: '/api/drawings',
       dashboard: '/api/dashboard',
-      search: '/api/search'
+      search: '/api/search',
+      sse: '/api/sse'
     }
   });
 });
@@ -70,6 +103,7 @@ app.use('/api/thickness-specs', thicknessSpecsRoutes);
 app.use('/api/drawings', drawingsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/search', searchRoutes);
+app.use('/api/sse', sseRoutes);
 
 // 404处理
 app.use('*', (req, res) => {
@@ -91,9 +125,10 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 35001;
 
 // 启动服务器
-app.listen(PORT, async () => {
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`🚀 激光切割管理系统后端服务启动成功`);
   console.log(`📡 HTTP API: http://localhost:${PORT}`);
+  console.log(`🌐 局域网访问: http://[YOUR_IP]:${PORT}`);
   console.log(`🔍 健康检查: http://localhost:${PORT}/health`);
   console.log(`📚 API文档: http://localhost:${PORT}/api`);
   

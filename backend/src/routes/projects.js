@@ -2,6 +2,7 @@ const express = require('express');
 const { Project, Material, Drawing, ThicknessSpec, Worker, User } = require('../models');
 const { Op } = require('sequelize');
 const { authenticate, requireOperator, requireAdmin } = require('../middleware/auth');
+const sseManager = require('../utils/sseManager');
 
 const router = express.Router();
 
@@ -177,6 +178,19 @@ router.post('/', authenticate, requireOperator, async (req, res) => {
       project: newProject
     });
 
+    // 发送SSE事件通知其他用户
+    try {
+      sseManager.broadcast('project-created', {
+        project: newProject,
+        userName: req.user.name,
+        userId: req.user.id
+      }, req.user.id); // 排除创建者自己
+      
+      console.log(`SSE事件已发送: 项目创建 - ${newProject.name}`);
+    } catch (sseError) {
+      console.error('发送SSE事件失败:', sseError);
+    }
+
   } catch (error) {
     console.error('创建项目错误:', error);
     res.status(500).json({
@@ -199,6 +213,9 @@ router.put('/:id', authenticate, requireOperator, async (req, res) => {
         error: '项目不存在'
       });
     }
+
+    // 保存原始项目状态用于比较
+    const originalStatus = project.status;
 
     const updateData = {};
     if (name) updateData.name = name.trim();
@@ -230,6 +247,23 @@ router.put('/:id', authenticate, requireOperator, async (req, res) => {
       project: updatedProject
     });
 
+    // 如果项目状态发生变化，发送SSE事件
+    if (status && status !== originalStatus) {
+      try {
+        sseManager.broadcast('project-status-changed', {
+          project: updatedProject,
+          oldStatus: originalStatus,
+          newStatus: status,
+          userName: req.user.name,
+          userId: req.user.id
+        }, req.user.id); // 排除操作者自己
+        
+        console.log(`SSE事件已发送: 项目状态变更 - ${updatedProject.name} (${originalStatus} → ${status})`);
+      } catch (sseError) {
+        console.error('发送SSE事件失败:', sseError);
+      }
+    }
+
   } catch (error) {
     console.error('更新项目错误:', error);
     res.status(500).json({
@@ -252,11 +286,31 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
       });
     }
 
+    // 保存项目信息用于SSE事件
+    const projectInfo = {
+      id: project.id,
+      name: project.name
+    };
+
     await project.destroy();
 
     res.json({
       message: '项目删除成功'
     });
+
+    // 发送SSE事件通知其他用户
+    try {
+      sseManager.broadcast('project-deleted', {
+        projectId: projectInfo.id,
+        projectName: projectInfo.name,
+        userName: req.user.name,
+        userId: req.user.id
+      }, req.user.id); // 排除删除者自己
+      
+      console.log(`SSE事件已发送: 项目删除 - ${projectInfo.name}`);
+    } catch (sseError) {
+      console.error('发送SSE事件失败:', sseError);
+    }
 
   } catch (error) {
     console.error('删除项目错误:', error);
