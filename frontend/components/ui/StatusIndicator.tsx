@@ -103,6 +103,7 @@ export interface StatusToggleProps {
   status: StatusType
   onChange: (newStatus: StatusType) => void
   size?: 'sm' | 'md' | 'lg'
+  disabled?: boolean
   className?: string
 }
 
@@ -110,6 +111,7 @@ export const StatusToggle: React.FC<StatusToggleProps> = ({
   status,
   onChange,
   size = 'md',
+  disabled = false,
   className = ''
 }) => {
   const getNextStatus = (current: StatusType): StatusType => {
@@ -128,6 +130,7 @@ export const StatusToggle: React.FC<StatusToggleProps> = ({
   }
 
   const handleClick = () => {
+    if (disabled) return;
     const nextStatus = getNextStatus(status)
     onChange(nextStatus)
   }
@@ -136,9 +139,9 @@ export const StatusToggle: React.FC<StatusToggleProps> = ({
     <StatusIndicator
       status={status}
       size={size}
-      interactive={true}
+      interactive={!disabled}
       onClick={handleClick}
-      className={className}
+      className={`${className} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
     />
   )
 }

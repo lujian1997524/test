@@ -9,9 +9,17 @@ const router = express.Router();
 // 获取项目列表
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { search, status, priority, page = 1, limit = 20 } = req.query;
+    const { 
+      search, 
+      status, 
+      priority, 
+      page = 1, 
+      limit = 20 
+    } = req.query;
     
-    const whereClause = {};
+    const whereClause = {
+      isPastProject: false // 只获取非过往项目
+    };
     
     // 搜索条件
     if (search) {
@@ -73,6 +81,319 @@ router.get('/', authenticate, async (req, res) => {
   }
 });
 
+// 获取已完成任务（状态为completed且超过1天的项目）
+router.get('/completed', authenticate, async (req, res) => {
+  try {
+    const { workerName, page = 1, limit = 20 } = req.query;
+    
+    const whereClause = {
+      status: 'completed'
+    };
+    
+    // 超过1天的条件
+    const oneDayAgo = new Date();
+    oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+    whereClause.updatedAt = {
+      [Op.lt]: oneDayAgo
+    };
+
+    const include = [
+      {
+        association: 'creator',
+        attributes: ['id', 'name']
+      },
+      {
+        association: 'assignedWorker',
+        attributes: ['id', 'name', 'department']
+      },
+      {
+        association: 'materials',
+        include: ['thicknessSpec']
+      }
+    ];
+
+    // 如果有工人姓名筛选
+    if (workerName) {
+      include[1].where = {
+        name: { [Op.like]: `%${workerName}%` }
+      };
+      include[1].required = true; // 内连接确保有分配工人
+    }
+
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    const { count, rows: projects } = await Project.findAndCountAll({
+      where: whereClause,
+      include,
+      order: [['updatedAt', 'DESC']],
+      limit: parseInt(limit),
+      offset
+    });
+
+    res.json({
+      projects,
+      pagination: {
+        total: count,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(count / parseInt(limit))
+      }
+    });
+
+  } catch (error) {
+    console.error('获取已完成任务错误:', error);
+    res.status(500).json({
+      error: '获取已完成任务失败',
+      message: error.message
+    });
+  }
+});
+
+// ===== 过往项目相关API =====
+
+// 获取过往项目列表（按月份分组）
+router.get('/past', authenticate, async (req, res) => {
+  try {
+    const { year, month, page = 1, limit = 20 } = req.query;
+    
+    const whereClause = {
+      isPastProject: true
+    };
+    
+    // 如果指定了年月，添加时间范围筛选
+    if (year && month) {
+      const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+      const endDate = new Date(parseInt(year), parseInt(month), 0);
+      endDate.setHours(23, 59, 59, 999);
+      
+      whereClause.movedToPastAt = {
+        [Op.between]: [startDate, endDate]
+      };
+    }
+
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    const { count, rows: projects } = await Project.findAndCountAll({
+      where: whereClause,
+      include: [
+        {
+          association: 'creator',
+          attributes: ['id', 'name']
+        },
+        {
+          association: 'assignedWorker',
+          attributes: ['id', 'name', 'department']
+        },
+        {
+          association: 'pastProjectMover',
+          attributes: ['id', 'name']
+        },
+        {
+          association: 'materials',
+          include: [{
+            association: 'thicknessSpec'
+          }, {
+            association: 'completedByUser',
+            attributes: ['id', 'name']
+          }]
+        }
+      ],
+      order: [['movedToPastAt', 'DESC']],
+      limit: parseInt(limit),
+      offset
+    });
+
+    // 如果没有指定年月，则按月份分组返回
+    if (!year || !month) {
+      const groupedByMonth = projects.reduce((acc, project) => {
+        const movedDate = new Date(project.movedToPastAt);
+        const monthKey = `${movedDate.getFullYear()}-${String(movedDate.getMonth() + 1).padStart(2, '0')}`;
+        
+        if (!acc[monthKey]) {
+          acc[monthKey] = [];
+        }
+        acc[monthKey].push(project);
+        
+        return acc;
+      }, {});
+      
+      res.json({
+        projectsByMonth: groupedByMonth,
+        pagination: {
+          total: count,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          pages: Math.ceil(count / parseInt(limit))
+        }
+      });
+    } else {
+      res.json({
+        projects,
+        pagination: {
+          total: count,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          pages: Math.ceil(count / parseInt(limit))
+        }
+      });
+    }
+
+  } catch (error) {
+    console.error('获取过往项目错误:', error);
+    res.status(500).json({
+      error: '获取过往项目失败',
+      message: error.message
+    });
+  }
+});
+
+// 移动已完成项目到过往项目
+router.post('/:id/move-to-past', authenticate, requireOperator, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const project = await Project.findByPk(id);
+
+    if (!project) {
+      return res.status(404).json({
+        error: '项目不存在'
+      });
+    }
+
+    // 检查项目状态是否为已完成
+    if (project.status !== 'completed') {
+      return res.status(400).json({
+        error: '只能移动已完成的项目到过往项目'
+      });
+    }
+
+    // 检查是否已经是过往项目
+    if (project.isPastProject) {
+      return res.status(400).json({
+        error: '项目已经是过往项目'
+      });
+    }
+
+    // 更新项目为过往项目
+    await project.update({
+      isPastProject: true,
+      movedToPastAt: new Date(),
+      movedToPastBy: req.user.id
+    });
+
+    // 获取更新后的完整信息
+    const updatedProject = await Project.findByPk(id, {
+      include: [
+        {
+          association: 'creator',
+          attributes: ['id', 'name']
+        },
+        {
+          association: 'assignedWorker',
+          attributes: ['id', 'name']
+        },
+        {
+          association: 'pastProjectMover',
+          attributes: ['id', 'name']
+        }
+      ]
+    });
+
+    res.json({
+      message: '项目已移动到过往项目',
+      project: updatedProject
+    });
+
+    // 发送SSE事件通知其他用户
+    try {
+      sseManager.broadcast('project-moved-to-past', {
+        project: updatedProject,
+        userName: req.user.name,
+        userId: req.user.id
+      }, req.user.id);
+      
+      console.log(`SSE事件已发送: 项目移动到过往 - ${updatedProject.name}`);
+    } catch (sseError) {
+      console.error('发送SSE事件失败:', sseError);
+    }
+
+  } catch (error) {
+    console.error('移动项目到过往错误:', error);
+    res.status(500).json({
+      error: '移动项目到过往失败',
+      message: error.message
+    });
+  }
+});
+
+// 恢复过往项目到活跃状态
+router.post('/:id/restore-from-past', authenticate, requireOperator, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const project = await Project.findByPk(id);
+
+    if (!project) {
+      return res.status(404).json({
+        error: '项目不存在'
+      });
+    }
+
+    // 检查是否是过往项目
+    if (!project.isPastProject) {
+      return res.status(400).json({
+        error: '只能恢复过往项目到活跃状态'
+      });
+    }
+
+    // 恢复项目到活跃状态
+    await project.update({
+      isPastProject: false,
+      movedToPastAt: null,
+      movedToPastBy: null
+    });
+
+    // 获取更新后的完整信息
+    const updatedProject = await Project.findByPk(id, {
+      include: [
+        {
+          association: 'creator',
+          attributes: ['id', 'name']
+        },
+        {
+          association: 'assignedWorker',
+          attributes: ['id', 'name']
+        }
+      ]
+    });
+
+    res.json({
+      message: '项目已恢复到活跃状态',
+      project: updatedProject
+    });
+
+    // 发送SSE事件通知其他用户
+    try {
+      sseManager.broadcast('project-restored-from-past', {
+        project: updatedProject,
+        userName: req.user.name,
+        userId: req.user.id
+      }, req.user.id);
+      
+      console.log(`SSE事件已发送: 项目从过往恢复 - ${updatedProject.name}`);
+    } catch (sseError) {
+      console.error('发送SSE事件失败:', sseError);
+    }
+
+  } catch (error) {
+    console.error('恢复过往项目错误:', error);
+    res.status(500).json({
+      error: '恢复过往项目失败',
+      message: error.message
+    });
+  }
+});
+
 // 获取单个项目详情
 router.get('/:id', authenticate, async (req, res) => {
   try {
@@ -96,7 +417,7 @@ router.get('/:id', authenticate, async (req, res) => {
               attributes: ['id', 'thickness', 'unit', 'materialType']
             },
             {
-              association: 'completedByWorker',
+              association: 'completedByUser',
               attributes: ['id', 'name']
             }
           ]
@@ -184,7 +505,7 @@ router.post('/', authenticate, requireOperator, async (req, res) => {
         project: newProject,
         userName: req.user.name,
         userId: req.user.id
-      }, req.user.id); // 排除创建者自己
+      }, req.user.id);
       
       console.log(`SSE事件已发送: 项目创建 - ${newProject.name}`);
     } catch (sseError) {
@@ -256,7 +577,7 @@ router.put('/:id', authenticate, requireOperator, async (req, res) => {
           newStatus: status,
           userName: req.user.name,
           userId: req.user.id
-        }, req.user.id); // 排除操作者自己
+        }, req.user.id);
         
         console.log(`SSE事件已发送: 项目状态变更 - ${updatedProject.name} (${originalStatus} → ${status})`);
       } catch (sseError) {
@@ -305,7 +626,7 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
         projectName: projectInfo.name,
         userName: req.user.name,
         userId: req.user.id
-      }, req.user.id); // 排除删除者自己
+      }, req.user.id);
       
       console.log(`SSE事件已发送: 项目删除 - ${projectInfo.name}`);
     } catch (sseError) {

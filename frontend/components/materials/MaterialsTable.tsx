@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useMaterialStore, useProjectStore } from '@/stores';
 import { StatusToggle } from '@/components/ui';
 import type { StatusType } from '@/components/ui';
+import { ArchiveBoxIcon } from '@heroicons/react/24/outline';
 
 interface ThicknessSpec {
   id: number;
@@ -51,21 +52,35 @@ interface Project {
 interface MaterialsTableProps {
   selectedProjectId: number | null;
   onProjectSelect: (id: number | null) => void;
+  viewType?: 'active' | 'completed';
   className?: string;
 }
 
 export const MaterialsTable = ({ 
   selectedProjectId, 
   onProjectSelect, 
+  viewType = 'active',
   className = '' 
 }: MaterialsTableProps) => {
   const [thicknessSpecs, setThicknessSpecs] = useState<ThicknessSpec[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingNotes, setEditingNotes] = useState<{projectId: number, thicknessSpecId: number} | null>(null);
   const [tempNotes, setTempNotes] = useState('');
+  const [movingToPast, setMovingToPast] = useState<number | null>(null);
+  const [restoringFromPast, setRestoringFromPast] = useState<number | null>(null);
   const { token, user } = useAuth();
   const { updateMaterialStatus } = useMaterialStore();
-  const { projects, updateProject, fetchProjects } = useProjectStore();
+  const { projects, completedProjects, pastProjects, updateProject, fetchProjects, moveToPastProject, restoreFromPastProject } = useProjectStore();
+
+  // 根据视图类型获取对应的项目列表
+  const getProjectsList = () => {
+    switch (viewType) {
+      case 'completed':
+        return pastProjects; // 使用过往项目数据
+      default:
+        return projects;
+    }
+  };
 
   // 如果还没有加载厚度规格，先加载
   useEffect(() => {
@@ -108,7 +123,7 @@ export const MaterialsTable = ({
 
   // 计算项目应该的状态（基于当前已知的状态变更）
   const calculateProjectStatusRealtime = (projectId: number, changedThicknessSpecId?: number, newMaterialStatus?: StatusType): string => {
-    const currentProject = projects.find(p => p.id === projectId);
+    const currentProject = getProjectsList().find(p => p.id === projectId);
     
     // 获取所有厚度规格的状态（包括即将变更的状态）
     const allThicknessStatuses: string[] = [];
@@ -177,7 +192,7 @@ export const MaterialsTable = ({
     console.log(`🔥 实时更新项目状态，项目ID: ${projectId}, 变更规格: ${changedThicknessSpecId}, 新状态: ${newMaterialStatus}`);
     
     const newStatus = calculateProjectStatusRealtime(projectId, changedThicknessSpecId, newMaterialStatus);
-    const currentProject = projects.find(p => p.id === projectId);
+    const currentProject = getProjectsList().find(p => p.id === projectId);
     
     if (currentProject && currentProject.status !== newStatus) {
       console.log(`项目 ${projectId} 状态变更: ${currentProject.status} → ${newStatus}`);
@@ -204,7 +219,7 @@ export const MaterialsTable = ({
       setLoading(true);
       
       // 从projects数组中找到对应项目
-      const currentProject = projects.find(p => p.id === projectId);
+      const currentProject = getProjectsList().find(p => p.id === projectId);
       if (!currentProject) {
         console.error('项目不存在');
         return;
@@ -287,6 +302,10 @@ export const MaterialsTable = ({
       // 成功更新或创建后，项目状态会通过SSE事件自动更新
       await updateProjectStatusRealtime(projectId, thicknessSpecId, newStatus);
       
+      // 立即刷新项目数据以更新本地UI
+      console.log('🔄 立即刷新项目数据以更新本地UI');
+      await fetchProjects();
+      
     } catch (error) {
       console.error('更新材料状态失败:', error);
       alert('更新材料状态失败');
@@ -295,9 +314,45 @@ export const MaterialsTable = ({
     }
   };
 
+  // 恢复项目从过往
+  const handleRestoreFromPast = async (projectId: number) => {
+    if (!confirm('确定要将此项目恢复到活跃状态吗？项目将重新回到活跃项目列表中。')) {
+      return;
+    }
+    
+    setRestoringFromPast(projectId);
+    try {
+      const success = await restoreFromPastProject(projectId);
+      if (success) {
+        // 恢复成功，刷新项目列表
+        await fetchProjects();
+      }
+    } finally {
+      setRestoringFromPast(null);
+    }
+  };
+
+  // 移动项目到过往
+  const handleMoveToPast = async (projectId: number) => {
+    if (!confirm('确定要将此项目移动到过往项目吗？此操作将把项目从活跃状态移动到过往项目管理中。')) {
+      return;
+    }
+    
+    setMovingToPast(projectId);
+    try {
+      const success = await moveToPastProject(projectId);
+      if (success) {
+        // 移动成功，刷新项目列表
+        await fetchProjects();
+      }
+    } finally {
+      setMovingToPast(null);
+    }
+  };
+
   // 获取项目的材料状态（根据厚度规格ID）
   const getProjectMaterialStatus = (projectId: number, thicknessSpecId: number) => {
-    const proj = projects.find(p => p.id === projectId);
+    const proj = getProjectsList().find(p => p.id === projectId);
     if (!proj || !proj.materials) return 'empty';
     const material = proj.materials.find(m => m.thicknessSpecId === thicknessSpecId);
     return (material?.status || 'empty') as StatusType;
@@ -305,14 +360,14 @@ export const MaterialsTable = ({
 
   // 获取项目的材料信息
   const getProjectMaterial = (projectId: number, thicknessSpecId: number) => {
-    const proj = projects.find(p => p.id === projectId);
+    const proj = getProjectsList().find(p => p.id === projectId);
     if (!proj || !proj.materials) return null;
     return proj.materials.find(m => m.thicknessSpecId === thicknessSpecId) || null;
   };
 
   // 显示项目列表（格式：序号-项目名-工人-2mm-3mm-4mm...-备注-开始时间-完成时间-图纸）
   const renderProjectsTable = () => {
-    const projectsToShow = selectedProjectId ? projects.filter(p => p.id === selectedProjectId) : projects;
+    const projectsToShow = selectedProjectId ? getProjectsList().filter(p => p.id === selectedProjectId) : getProjectsList();
     
     return (
       <div className={`bg-white/80 backdrop-blur-xl rounded-2xl border border-gray-200 shadow-lg overflow-hidden flex flex-col ${className}`}>
@@ -344,6 +399,7 @@ export const MaterialsTable = ({
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">开始时间</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">完成时间</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">图纸</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -391,6 +447,7 @@ export const MaterialsTable = ({
                               updateMaterialStatusInTable(proj.id, spec.id, newStatus);
                             }}
                             size="md"
+                            disabled={viewType === 'completed'} // 过往项目禁用编辑
                           />
                         </td>
                       );
@@ -431,6 +488,39 @@ export const MaterialsTable = ({
                         )}
                       </div>
                     </td>
+
+                    {/* 操作 */}
+                    <td className="px-4 py-4">
+                      <div className="flex items-center space-x-2">
+                        {/* 活跃项目视图：显示"移至过往"按钮 */}
+                        {proj.status === 'completed' && viewType !== 'completed' && (
+                          <button
+                            onClick={() => handleMoveToPast(proj.id)}
+                            disabled={movingToPast === proj.id}
+                            className="inline-flex items-center px-2 py-1 text-xs font-medium text-orange-700 bg-orange-100 hover:bg-orange-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors"
+                            title="移动到过往项目"
+                          >
+                            <ArchiveBoxIcon className="w-3 h-3 mr-1" />
+                            {movingToPast === proj.id ? '移动中...' : '移至过往'}
+                          </button>
+                        )}
+                        
+                        {/* 过往项目视图：显示"恢复项目"按钮 */}
+                        {viewType === 'completed' && (
+                          <button
+                            onClick={() => handleRestoreFromPast(proj.id)}
+                            disabled={restoringFromPast === proj.id}
+                            className="inline-flex items-center px-2 py-1 text-xs font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors"
+                            title="恢复到活跃项目"
+                          >
+                            <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            {restoringFromPast === proj.id ? '恢复中...' : '恢复项目'}
+                          </button>
+                        )}
+                      </div>
+                    </td>
                   </motion.tr>
                 );
               })}
@@ -443,8 +533,14 @@ export const MaterialsTable = ({
                 <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                 </svg>
-                <p className="text-gray-500 text-lg">暂无项目</p>
-                <p className="text-gray-400 text-sm mt-2">点击右上角"新建"按钮创建项目</p>
+                <p className="text-gray-500 text-lg">
+                  {viewType === 'completed' ? '暂无过往项目' : '暂无活跃项目'}
+                </p>
+                <p className="text-gray-400 text-sm mt-2">
+                  {viewType === 'active' ? '点击右上角"新建"按钮创建项目' : 
+                   viewType === 'completed' ? '已完成的项目移动到过往后会显示在这里' :
+                   ''}
+                </p>
               </div>
             </div>
           )}

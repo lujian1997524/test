@@ -8,6 +8,13 @@ export type SSEEventType =
   | 'project-updated'
   | 'project-deleted'
   | 'project-status-changed'
+  | 'project-restored' 
+  | 'project-soft-deleted'
+  | 'project-moved-to-past'
+  | 'project-restored-from-past'
+  | 'projects-batch-restored'
+  | 'projects-batch-soft-deleted'
+  | 'projects-batch-destroyed'
   | 'material-status-changed'
   | 'material-batch-status-changed'
   | 'test';
@@ -106,8 +113,11 @@ class SSEManager {
         // 监听所有SSE事件类型
         const eventTypes: SSEEventType[] = [
           'connected', 'heartbeat', 'project-created', 'project-updated', 
-          'project-deleted', 'project-status-changed', 'material-status-changed',
-          'material-batch-status-changed', 'test'
+          'project-deleted', 'project-status-changed',
+          'project-restored', 'project-soft-deleted', 'project-moved-to-past',
+          'project-restored-from-past', 'projects-batch-restored',
+          'projects-batch-soft-deleted', 'projects-batch-destroyed',
+          'material-status-changed', 'material-batch-status-changed', 'test'
         ];
 
         eventTypes.forEach(eventType => {

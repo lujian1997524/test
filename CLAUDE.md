@@ -135,8 +135,11 @@ cd frontend && npm run build
 # 构建Electron桌面应用
 cd frontend && npm run build:electron
 
-# 后端构建
-cd backend && npm run build
+# 启动生产环境前端服务
+cd frontend && npm run start
+
+# 启动后端生产环境
+cd backend && npm run start
 ```
 
 ## 状态管理架构
@@ -358,3 +361,17 @@ window.addEventListener('materials-updated', () => {
 - 空状态处理需要删除数据库记录
 - API调用必须包含正确的JWT认证头
 - 事件系统用于组件间通信：`window.dispatchEvent(new CustomEvent('materials-updated'))`
+
+## 完成的任务清单
+项目目前已经完成了以下主要功能：
+- ✅ 用户认证系统（基于姓名的简单登录）
+- ✅ 项目管理模块（CRUD操作）
+- ✅ 工人资料管理
+- ✅ 四状态材料管理系统（empty → pending → in_progress → completed → empty）
+- ✅ 动态厚度规格配置
+- ✅ 图纸文件上传和版本控制
+- ✅ 实时状态同步（Zustand + 自定义事件）
+- ✅ iOS 18 & macOS 15 设计系统
+- ✅ 数据库结构和关联关系
+- ✅ API认证和权限控制
+- ✅ Docker 容器化开发环境

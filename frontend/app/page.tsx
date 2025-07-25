@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { ProjectTree } from '@/components/materials/ProjectTree';
+import { PastProjectsTree } from '@/components/projects/PastProjectsTree';
 import { MaterialsTable } from '@/components/materials/MaterialsTable';
 import { ProjectModal } from '@/components/materials/ProjectModal';
 import { ThicknessSpecModal } from '@/components/materials/ThicknessSpecModal';
@@ -24,6 +25,8 @@ export default function Home() {
 
 function HomeContent() {
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+  const [viewType, setViewType] = useState<'active' | 'completed'>('active');
+  const [workerNameFilter, setWorkerNameFilter] = useState('');
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showThicknessSpecModal, setShowThicknessSpecModal] = useState(false);
   const [showDashboardModal, setShowDashboardModal] = useState(false);
@@ -133,9 +136,33 @@ function HomeContent() {
     }
   };
 
+  // 处理项目选择
+  const handleProjectSelect = (projectId: number | null, type: 'active' | 'completed') => {
+    console.log('🔄 切换视图类型:', type, '项目ID:', projectId);
+    setViewType(type);
+    setSelectedProjectId(projectId);
+    
+    if (type === 'completed') {
+      console.log('✅ 获取过往项目数据...');
+      // 使用过往项目API
+      const { fetchPastProjects } = useProjectStore.getState();
+      fetchPastProjects();
+    } else {
+      console.log('📋 获取活跃项目数据...');
+      fetchProjects(); // 获取活跃项目
+    }
+  };
+
   // 刷新数据
   const handleRefresh = () => {
-    fetchProjects();
+    // 根据当前视图类型刷新相应数据
+    if (viewType === 'completed') {
+      const { fetchPastProjects } = useProjectStore.getState();
+      fetchPastProjects();
+    } else {
+      fetchProjects();
+    }
+    
     if (selectedProjectId) {
       fetchMaterials(selectedProjectId);
     }
@@ -192,6 +219,40 @@ function HomeContent() {
 
               {/* 功能按钮 */}
               <div className="flex items-center space-x-2">
+                {/* 视图切换按钮组 */}
+                <div className="flex items-center bg-white border border-gray-200 rounded-lg overflow-hidden">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => handleProjectSelect(null, 'active')}
+                    className={`px-3 py-2 text-sm font-medium transition-all ${
+                      viewType === 'active' 
+                        ? 'bg-blue-500 text-white' 
+                        : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    活跃项目
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => handleProjectSelect(null, 'completed')}
+                    className={`px-3 py-2 text-sm font-medium transition-all ${
+                      viewType === 'completed' 
+                        ? 'bg-green-500 text-white' 
+                        : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                    </svg>
+                    过往项目
+                  </motion.button>
+                </div>
+
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -256,23 +317,32 @@ function HomeContent() {
       </header>
 
       {/* 主要内容区域 */}
-      <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
+      <div className="flex flex-col lg:flex-row flex-1 overflow-hidden min-h-0">
         {/* 左侧项目树 */}
         <motion.div
           initial={{ x: -300, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           transition={{ duration: 0.6 }}
-          className="w-full lg:w-80 flex-shrink-0 h-64 lg:h-full"
+          className="w-full lg:w-80 xl:w-96 flex-shrink-0 h-64 lg:h-full lg:max-h-full lg:overflow-hidden"
         >
-          <ProjectTree
-            selectedProjectId={selectedProjectId}
-            onProjectSelect={setSelectedProjectId}
-            onCreateProject={openCreateModal}
-            onEditProject={openEditModal}
-            onDeleteProject={handleDeleteProject}
-            onRefresh={handleRefresh}
-            className="h-full"
-          />
+          {viewType === 'active' ? (
+            <ProjectTree
+              selectedProjectId={selectedProjectId}
+              onProjectSelect={setSelectedProjectId}
+              onCreateProject={openCreateModal}
+              onEditProject={openEditModal}
+              onDeleteProject={handleDeleteProject}
+              onRefresh={handleRefresh}
+              className="h-full"
+            />
+          ) : (
+            <PastProjectsTree
+              selectedProjectId={selectedProjectId}
+              onProjectSelect={setSelectedProjectId}
+              onRefresh={handleRefresh}
+              className="h-full"
+            />
+          )}
         </motion.div>
 
         {/* 右侧表格区域 */}
@@ -280,12 +350,78 @@ function HomeContent() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.2 }}
-          className="flex-1 p-3 lg:p-6 overflow-hidden"
+          className="flex-1 p-3 lg:p-6 overflow-hidden min-w-0 flex flex-col"
         >
+          {/* 过往项目筛选器 */}
+          {viewType === 'completed' && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-4 bg-white/80 backdrop-blur-xl rounded-xl border border-gray-200 p-4"
+            >
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <label htmlFor="workerFilter" className="block text-sm font-medium text-gray-700 mb-2">
+                    按工人姓名筛选
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      id="workerFilter"
+                      type="text"
+                      placeholder="输入工人姓名..."
+                      value={workerNameFilter}
+                      onChange={(e) => setWorkerNameFilter(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleProjectSelect(null, 'completed');
+                        }
+                      }}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => handleProjectSelect(null, 'completed')}
+                      className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                      搜索
+                    </motion.button>
+                    {workerNameFilter && (
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => {
+                          setWorkerNameFilter('');
+                          handleProjectSelect(null, 'completed');
+                        }}
+                        className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors flex items-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        清除
+                      </motion.button>
+                    )}
+                  </div>
+                  {workerNameFilter && (
+                    <p className="text-sm text-blue-600 mt-2">
+                      当前筛选: 工人姓名包含 "{workerNameFilter}"
+                    </p>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           <MaterialsTable
             selectedProjectId={selectedProjectId}
             onProjectSelect={setSelectedProjectId}
-            className="h-full"
+            viewType={viewType}
+            className="flex-1"
           />
         </motion.div>
       </div>

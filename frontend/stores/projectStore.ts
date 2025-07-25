@@ -60,17 +60,24 @@ const debouncedRefresh = (fetchProjects: () => Promise<void>) => {
 interface ProjectStore {
   // 状态
   projects: ProjectState[];
+  completedProjects: ProjectState[];
+  pastProjects: ProjectState[];
+  pastProjectsByMonth: Record<string, ProjectState[]>;
   loading: boolean;
   error: string | null;
   lastUpdated: number;
-  sseListenersSetup: boolean; // 添加标志位防止重复设置
-  _sseHandlers?: { [key: string]: (data: any) => void }; // 内部存储监听器引用
+  sseListenersSetup: boolean;
+  _sseHandlers?: { [key: string]: (data: any) => void };
 
   // 操作方法
   fetchProjects: () => Promise<void>;
+  fetchCompletedProjects: (workerName?: string) => Promise<void>;
+  fetchPastProjects: (year?: number, month?: number) => Promise<void>;
   createProject: (projectData: Partial<ProjectState>) => Promise<ProjectState | null>;
   updateProject: (id: number, updates: Partial<ProjectState>) => Promise<ProjectState | null>;
   deleteProject: (id: number) => Promise<boolean>;
+  moveToPastProject: (id: number) => Promise<boolean>;
+  restoreFromPastProject: (id: number) => Promise<boolean>;
   getProjectById: (id: number) => ProjectState | undefined;
   
   // SSE相关方法
@@ -90,13 +97,16 @@ interface ProjectStore {
 export const useProjectStore = create<ProjectStore>((set, get) => ({
   // 初始状态
   projects: [],
+  completedProjects: [],
+  pastProjects: [],
+  pastProjectsByMonth: {},
   loading: false,
   error: null,
   lastUpdated: 0,
-  sseListenersSetup: false, // 初始化标志位
-  _sseHandlers: undefined, // 初始化监听器引用存储
+  sseListenersSetup: false,
+  _sseHandlers: undefined,
 
-  // 获取所有项目
+  // 获取项目列表
   fetchProjects: async () => {
     set({ loading: true, error: null });
     
@@ -117,7 +127,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       }
       
       const data = await response.json();
-      const projects = data.projects || []; // 从响应中提取projects数组
+      const projects = data.projects || [];
       
       set({ 
         projects, 
@@ -127,6 +137,104 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     } catch (error) {
       set({ 
         error: error instanceof Error ? error.message : '未知错误',
+        loading: false 
+      });
+    }
+  },
+
+  // 获取已完成任务列表
+  fetchCompletedProjects: async (workerName) => {
+    set({ loading: true, error: null });
+    
+    try {
+      const token = getAuthToken();
+      if (!token) {
+        throw new Error('未找到认证令牌');
+      }
+      
+      const params = new URLSearchParams();
+      if (workerName) {
+        params.append('workerName', workerName);
+      }
+      
+      const url = `/api/projects/completed${params.toString() ? '?' + params.toString() : ''}`;
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error('获取已完成任务失败');
+      }
+      
+      const data = await response.json();
+      const completedProjects = data.projects || [];
+      
+      set({ 
+        completedProjects, 
+        loading: false, 
+        lastUpdated: Date.now() 
+      });
+    } catch (error) {
+      set({ 
+        error: error instanceof Error ? error.message : '获取已完成任务失败',
+        loading: false 
+      });
+    }
+  },
+
+  // 获取过往项目列表
+  fetchPastProjects: async (year, month) => {
+    set({ loading: true, error: null });
+    
+    try {
+      const token = getAuthToken();
+      if (!token) {
+        throw new Error('未找到认证令牌');
+      }
+      
+      const params = new URLSearchParams();
+      if (year) params.append('year', year.toString());
+      if (month) params.append('month', month.toString());
+      
+      const url = `/api/projects/past${params.toString() ? '?' + params.toString() : ''}`;
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error('获取过往项目失败');
+      }
+      
+      const data = await response.json();
+      
+      if (year && month) {
+        // 如果指定了年月，返回项目列表
+        const pastProjects = data.projects || [];
+        set({ 
+          pastProjects, 
+          loading: false, 
+          lastUpdated: Date.now() 
+        });
+      } else {
+        // 如果没有指定年月，返回按月分组的数据
+        const pastProjectsByMonth = data.projectsByMonth || {};
+        const pastProjects = Object.values(pastProjectsByMonth).flat() as ProjectState[];
+        set({ 
+          pastProjects,
+          pastProjectsByMonth, 
+          loading: false, 
+          lastUpdated: Date.now() 
+        });
+      }
+    } catch (error) {
+      set({ 
+        error: error instanceof Error ? error.message : '获取过往项目失败',
         loading: false 
       });
     }
@@ -156,7 +264,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       }
       
       const data = await response.json();
-      const newProject = data.project; // 从响应中提取project对象
+      const newProject = data.project;
       
       // 更新本地状态
       set(state => ({
@@ -204,7 +312,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       }
       
       const data = await response.json();
-      const updatedProject = data.project; // 从响应中提取project对象
+      const updatedProject = data.project;
       
       // 更新本地状态
       set(state => ({
@@ -273,6 +381,101 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     }
   },
 
+  // 移动项目到过往项目
+  moveToPastProject: async (id) => {
+    set({ loading: true, error: null });
+    
+    try {
+      const token = getAuthToken();
+      if (!token) {
+        throw new Error('未找到认证令牌');
+      }
+      
+      const response = await fetch(`/api/projects/${id}/move-to-past`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '移动项目到过往失败');
+      }
+      
+      const data = await response.json();
+      const updatedProject = data.project;
+      
+      // 从活跃项目列表中移除
+      set(state => ({
+        projects: state.projects.filter(p => p.id !== id),
+        completedProjects: state.completedProjects.filter(p => p.id !== id),
+        loading: false,
+        lastUpdated: Date.now()
+      }));
+      
+      // 通知其他组件更新
+      window.dispatchEvent(new CustomEvent('project-moved-to-past', { 
+        detail: { id, project: updatedProject } 
+      }));
+      
+      return true;
+    } catch (error) {
+      set({ 
+        error: error instanceof Error ? error.message : '移动项目到过往失败',
+        loading: false 
+      });
+      return false;
+    }
+  },
+
+  // 恢复过往项目到活跃状态
+  restoreFromPastProject: async (id) => {
+    set({ loading: true, error: null });
+    
+    try {
+      const token = getAuthToken();
+      if (!token) {
+        throw new Error('未找到认证令牌');
+      }
+      
+      const response = await fetch(`/api/projects/${id}/restore-from-past`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '恢复项目失败');
+      }
+      
+      const data = await response.json();
+      const updatedProject = data.project;
+      
+      // 从过往项目列表中移除
+      set(state => ({
+        pastProjects: state.pastProjects.filter(p => p.id !== id),
+        loading: false,
+        lastUpdated: Date.now()
+      }));
+      
+      // 通知其他组件更新
+      window.dispatchEvent(new CustomEvent('project-restored-from-past', { 
+        detail: { id, project: updatedProject } 
+      }));
+      
+      return true;
+    } catch (error) {
+      set({ 
+        error: error instanceof Error ? error.message : '恢复项目失败',
+        loading: false 
+      });
+      return false;
+    }
+  },
+
   // 根据ID获取项目
   getProjectById: (id) => {
     return get().projects.find(p => p.id === id);
@@ -295,16 +498,11 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     const projectCreatedHandler = (data: any) => {
       console.log('🆕 收到项目创建事件:', data);
       if (data.project) {
-        // 检查项目是否已存在，如果不存在才添加
         const existingProject = get().projects.find(p => p.id === data.project.id);
         if (!existingProject) {
           get().addProject(data.project);
-          // 触发状态更新强制刷新UI
           set({ lastUpdated: Date.now() });
-        } else {
-          console.log('🔄 项目已存在，跳过添加:', data.project.id);
         }
-        // 使用防抖刷新数据确保一致性
         debouncedRefresh(get().fetchProjects);
       }
     };
@@ -314,9 +512,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       console.log('📝 收到项目更新事件:', data);
       if (data.project) {
         get().updateProjectInStore(data.project.id, data.project);
-        // 触发状态更新强制刷新UI
         set({ lastUpdated: Date.now() });
-        // 使用防抖刷新数据确保一致性
         debouncedRefresh(get().fetchProjects);
       }
     };
@@ -326,9 +522,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       console.log('🔄 收到项目状态变更事件:', data);
       if (data.project) {
         get().updateProjectInStore(data.project.id, data.project);
-        // 触发状态更新强制刷新UI
         set({ lastUpdated: Date.now() });
-        // 使用防抖刷新数据确保一致性
         debouncedRefresh(get().fetchProjects);
       }
     };
@@ -338,27 +532,21 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       console.log('🗑️ 收到项目删除事件:', data);
       if (data.projectId) {
         get().removeProject(data.projectId);
-        // 触发状态更新强制刷新UI
         set({ lastUpdated: Date.now() });
-        // 通知主页面如果删除的是当前选中的项目需要取消选择
         window.dispatchEvent(new CustomEvent('project-deleted-sse', { 
           detail: { id: data.projectId } 
         }));
-        // 使用防抖刷新数据确保一致性
         debouncedRefresh(get().fetchProjects);
       }
     };
 
-    // 监听板材状态变更事件（不显示通知，但更新数据）
+    // 监听板材状态变更事件
     const materialStatusChangedHandler = (data: any) => {
       console.log('🔧 收到板材状态变更事件:', data);
       if (data.projectId) {
-        // 触发项目数据刷新以更新相关统计
         set({ lastUpdated: Date.now() });
-        // 使用防抖刷新数据
         debouncedRefresh(get().fetchProjects);
         
-        // 触发材料更新事件，通知其他组件
         window.dispatchEvent(new CustomEvent('materials-updated', { 
           detail: { 
             projectId: data.projectId, 
@@ -370,15 +558,12 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       }
     };
 
-    // 监听批量板材状态变更事件（不显示通知，但更新数据）
+    // 监听批量板材状态变更事件
     const materialBatchStatusChangedHandler = (data: any) => {
       console.log('🔧 收到批量板材状态变更事件:', data);
-      // 触发项目数据刷新
       set({ lastUpdated: Date.now() });
-      // 使用防抖刷新数据
       debouncedRefresh(get().fetchProjects);
       
-      // 触发材料更新事件
       window.dispatchEvent(new CustomEvent('materials-updated', { 
         detail: { 
           batchUpdate: true,
@@ -388,6 +573,27 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         } 
       }));
     };
+
+    // 监听项目移动到过往事件
+    const projectMovedToPastHandler = (data: any) => {
+      console.log('📁 收到项目移动到过往事件:', data);
+      if (data.project) {
+        get().removeProject(data.project.id);
+        set({ lastUpdated: Date.now() });
+        debouncedRefresh(get().fetchProjects);
+      }
+    };
+
+    // 监听项目从过往恢复事件
+    const projectRestoredFromPastHandler = (data: any) => {
+      console.log('🔄 收到项目从过往恢复事件:', data);
+      if (data.project) {
+        get().addProject(data.project);
+        set({ lastUpdated: Date.now() });
+        debouncedRefresh(get().fetchProjects);
+      }
+    };
+    
     // 注册事件监听器
     sseManager.addEventListener('project-created', projectCreatedHandler);
     sseManager.addEventListener('project-updated', projectUpdatedHandler);
@@ -395,6 +601,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     sseManager.addEventListener('project-deleted', projectDeletedHandler);
     sseManager.addEventListener('material-status-changed', materialStatusChangedHandler);
     sseManager.addEventListener('material-batch-status-changed', materialBatchStatusChangedHandler);
+    sseManager.addEventListener('project-moved-to-past', projectMovedToPastHandler);
+    sseManager.addEventListener('project-restored-from-past', projectRestoredFromPastHandler);
 
     // 保存监听器引用以便清理
     set({ 
@@ -405,7 +613,9 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         'project-status-changed': projectStatusChangedHandler,
         'project-deleted': projectDeletedHandler,
         'material-status-changed': materialStatusChangedHandler,
-        'material-batch-status-changed': materialBatchStatusChangedHandler
+        'material-batch-status-changed': materialBatchStatusChangedHandler,
+        'project-moved-to-past': projectMovedToPastHandler,
+        'project-restored-from-past': projectRestoredFromPastHandler
       }
     });
   },
@@ -434,23 +644,18 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         lastUpdated: Date.now()
       };
       console.log('📋 Zustand项目数量:', state.projects.length, '->', newState.projects.length);
-      console.log('📋 Zustand lastUpdated:', newState.lastUpdated);
       return newState;
     });
   },
   
   updateProjectInStore: (id, updates) => {
     console.log('📝 Zustand updateProjectInStore被调用:', id, updates);
-    set(state => {
-      const newState = {
-        projects: state.projects.map(p => 
-          p.id === id ? { ...p, ...updates } : p
-        ),
-        lastUpdated: Date.now()
-      };
-      console.log('📝 Zustand项目更新完成，项目数量:', newState.projects.length);
-      return newState;
-    });
+    set(state => ({
+      projects: state.projects.map(p => 
+        p.id === id ? { ...p, ...updates } : p
+      ),
+      lastUpdated: Date.now()
+    }));
   },
   
   removeProject: (id) => set(state => ({ 

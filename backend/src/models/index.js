@@ -19,6 +19,16 @@ User.hasMany(Drawing, {
   as: 'uploadedDrawings'
 });
 
+User.hasMany(Project, {
+  foreignKey: 'deletedBy',
+  as: 'deletedProjects'
+});
+
+User.hasMany(Project, {
+  foreignKey: 'movedToPastBy',
+  as: 'pastProjects'
+});
+
 // Worker 关联
 Worker.hasMany(Project, {
   foreignKey: 'assignedWorkerId',
@@ -39,6 +49,17 @@ Project.belongsTo(User, {
 Project.belongsTo(Worker, {
   foreignKey: 'assignedWorkerId',
   as: 'assignedWorker'
+});
+
+// 删除和过往项目操作人关联
+Project.belongsTo(User, {
+  foreignKey: 'deletedBy',
+  as: 'deleter'
+});
+
+Project.belongsTo(User, {
+  foreignKey: 'movedToPastBy',
+  as: 'pastProjectMover'
 });
 
 Project.hasMany(Material, {
