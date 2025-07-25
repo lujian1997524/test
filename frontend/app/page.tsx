@@ -6,6 +6,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { ProjectTree } from '@/components/materials/ProjectTree';
 import { PastProjectsTree } from '@/components/projects/PastProjectsTree';
 import { MaterialsTable } from '@/components/materials/MaterialsTable';
+import { ProjectDetail } from '@/components/projects/ProjectDetail';
 import { ProjectModal } from '@/components/materials/ProjectModal';
 import { ThicknessSpecModal } from '@/components/materials/ThicknessSpecModal';
 import { DashboardModal } from '@/components/materials/DashboardModal';
@@ -417,12 +418,21 @@ function HomeContent() {
             </motion.div>
           )}
 
-          <MaterialsTable
-            selectedProjectId={selectedProjectId}
-            onProjectSelect={setSelectedProjectId}
-            viewType={viewType}
-            className="flex-1"
-          />
+          {/* 条件渲染：项目详情页 或 项目列表表格 */}
+          {selectedProjectId && viewType === 'active' ? (
+            <ProjectDetail
+              projectId={selectedProjectId}
+              onBack={() => setSelectedProjectId(null)}
+              className="flex-1"
+            />
+          ) : (
+            <MaterialsTable
+              selectedProjectId={selectedProjectId}
+              onProjectSelect={setSelectedProjectId}
+              viewType={viewType}
+              className="flex-1"
+            />
+          )}
         </motion.div>
       </div>
 

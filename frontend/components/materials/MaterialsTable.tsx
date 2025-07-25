@@ -7,6 +7,10 @@ import { useMaterialStore, useProjectStore } from '@/stores';
 import { StatusToggle } from '@/components/ui';
 import type { StatusType } from '@/components/ui';
 import { ArchiveBoxIcon } from '@heroicons/react/24/outline';
+import { 
+  updateMaterialStatusShared, 
+  getProjectMaterialStatus 
+} from '@/utils/materialStatusManager';
 
 interface ThicknessSpec {
   id: number;
@@ -121,196 +125,21 @@ export const MaterialsTable = ({
     }
   };
 
-  // 计算项目应该的状态（基于当前已知的状态变更）
-  const calculateProjectStatusRealtime = (projectId: number, changedThicknessSpecId?: number, newMaterialStatus?: StatusType): string => {
-    const currentProject = getProjectsList().find(p => p.id === projectId);
-    
-    // 获取所有厚度规格的状态（包括即将变更的状态）
-    const allThicknessStatuses: string[] = [];
-    
-    thicknessSpecs.forEach(spec => {
-      if (spec.id === changedThicknessSpecId) {
-        // 这是正在变更的厚度规格，使用新状态
-        if (newMaterialStatus === 'empty') {
-          allThicknessStatuses.push('empty');
-        } else {
-          allThicknessStatuses.push(newMaterialStatus || 'empty');
-        }
-      } else {
-        // 其他厚度规格，查找现有材料记录
-        const material = currentProject?.materials?.find(m => m.thicknessSpecId === spec.id);
-        if (material) {
-          allThicknessStatuses.push(material.status);
-        } else {
-          allThicknessStatuses.push('empty');
-        }
-      }
-    });
-
-    // 检查各种状态是否存在
-    const hasEmpty = allThicknessStatuses.some(status => status === 'empty');
-    const hasPending = allThicknessStatuses.some(status => status === 'pending');
-    const hasInProgress = allThicknessStatuses.some(status => status === 'in_progress');
-    const hasCompleted = allThicknessStatuses.some(status => status === 'completed');
-
-    // 调试信息
-    console.log(`项目 ${projectId} 实时状态分析:`, {
-      allThicknessStatuses,
-      hasEmpty,
-      hasPending,
-      hasInProgress,
-      hasCompleted,
-      changedSpec: changedThicknessSpecId,
-      newStatus: newMaterialStatus
-    });
-
-    // 规则1: 有任何一个进行中状态时，项目为进行中状态
-    if (hasInProgress) {
-      console.log(`项目 ${projectId} -> in_progress (规则1: 有进行中状态)`);
-      return 'in_progress';
-    }
-
-    // 规则2: 当待处理状态和已完成状态同时存在时，项目为进行中状态
-    if (hasPending && hasCompleted) {
-      console.log(`项目 ${projectId} -> in_progress (规则2: 待处理+已完成)`);
-      return 'in_progress';
-    }
-
-    // 规则3: 当只有空白状态和已完成状态时，项目为已完成状态
-    if (hasCompleted && !hasPending && !hasInProgress) {
-      console.log(`项目 ${projectId} -> completed (规则3: 只有空白+已完成)`);
-      return 'completed';
-    }
-
-    // 规则4: 当只有空白状态和待处理状态时，项目为待处理状态
-    console.log(`项目 ${projectId} -> pending (规则4: 默认)`);
-    return 'pending';
-  };
-
-  // 更新项目状态（实时）
-  const updateProjectStatusRealtime = async (projectId: number, changedThicknessSpecId: number, newMaterialStatus: StatusType) => {
-    console.log(`🔥 实时更新项目状态，项目ID: ${projectId}, 变更规格: ${changedThicknessSpecId}, 新状态: ${newMaterialStatus}`);
-    
-    const newStatus = calculateProjectStatusRealtime(projectId, changedThicknessSpecId, newMaterialStatus);
-    const currentProject = getProjectsList().find(p => p.id === projectId);
-    
-    if (currentProject && currentProject.status !== newStatus) {
-      console.log(`项目 ${projectId} 状态变更: ${currentProject.status} → ${newStatus}`);
-      
-      try {
-        await updateProject(projectId, { status: newStatus as 'pending' | 'in_progress' | 'completed' | 'cancelled' });
-        console.log(`项目 ${projectId} 状态更新成功`);
-        
-        // 注意：SSE事件将由后端的项目更新路由自动发送，不需要在前端重复发送
-        
-      } catch (error) {
-        console.error('更新项目状态失败:', error);
-      }
-    } else {
-      console.log(`项目 ${projectId} 状态无需变更，当前状态: ${currentProject?.status}`);
-    }
-  };
-
-  // 更新材料状态
+  // 更新材料状态 - 使用共享逻辑
   const updateMaterialStatusInTable = async (projectId: number, thicknessSpecId: number, newStatus: StatusType) => {
     console.log(`🎯 材料状态更新开始: 项目${projectId}, 厚度规格${thicknessSpecId}, 新状态${newStatus}`);
     
-    try {
-      setLoading(true);
-      
-      // 从projects数组中找到对应项目
-      const currentProject = getProjectsList().find(p => p.id === projectId);
-      if (!currentProject) {
-        console.error('项目不存在');
-        return;
-      }
-      
-      const existingMaterial = currentProject.materials?.find(m => m.thicknessSpecId === thicknessSpecId);
-      
-      if (newStatus === 'empty') {
-        // 如果切换到空白状态，删除现有材料记录
-        if (existingMaterial) {
-          const deleteResponse = await fetch(`/api/materials/${existingMaterial.id}`, {
-            method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          });
-
-          if (!deleteResponse.ok) {
-            const errorData = await deleteResponse.json();
-            alert('删除材料记录失败: ' + (errorData.error || '服务器错误'));
-            return;
-          }
-        }
-        // 成功删除或本来就没有记录，项目状态会通过SSE事件自动更新
-        await updateProjectStatusRealtime(projectId, thicknessSpecId, 'empty');
-        return;
-      }
-      
-      if (existingMaterial) {
-        // 更新现有材料
-        const updateData: any = { 
-          status: newStatus
-        };
-
-        if (newStatus === 'in_progress' && !existingMaterial.startDate) {
-          updateData.startDate = new Date().toISOString().split('T')[0];
-        }
-
-        if (newStatus === 'completed') {
-          updateData.completedDate = new Date().toISOString().split('T')[0];
-          updateData.completedBy = user?.id;
-        }
-
-        const result = await updateMaterialStatus(existingMaterial.id, newStatus, updateData);
-        
-        if (!result) {
-          alert('更新材料状态失败，请重试');
-        }
-      } else {
-        // 创建新材料记录
-        const createData: any = {
-          projectId: projectId,
-          thicknessSpecId: thicknessSpecId,
-          status: newStatus
-        };
-
-        if (newStatus === 'in_progress') {
-          createData.startDate = new Date().toISOString().split('T')[0];
-        } else if (newStatus === 'completed') {
-          createData.completedDate = new Date().toISOString().split('T')[0];
-          createData.completedBy = user?.id;
-        }
-
-        const createResponse = await fetch('/api/materials', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify(createData),
-        });
-
-        if (!createResponse.ok) {
-          const errorData = await createResponse.json();
-          alert('创建材料记录失败: ' + (errorData.error || '服务器错误'));
-          return;
-        }
-      }
-      
-      // 成功更新或创建后，项目状态会通过SSE事件自动更新
-      await updateProjectStatusRealtime(projectId, thicknessSpecId, newStatus);
-      
-      // 立即刷新项目数据以更新本地UI
-      console.log('🔄 立即刷新项目数据以更新本地UI');
-      await fetchProjects();
-      
-    } catch (error) {
-      console.error('更新材料状态失败:', error);
-      alert('更新材料状态失败');
-    } finally {
-      setLoading(false);
+    const success = await updateMaterialStatusShared(projectId, thicknessSpecId, newStatus, {
+      projects: getProjectsList(),
+      thicknessSpecs,
+      user,
+      updateProjectFn: updateProject,
+      fetchProjectsFn: fetchProjects,
+      setLoadingFn: setLoading,
+    });
+    
+    if (!success) {
+      console.error('材料状态更新失败');
     }
   };
 
@@ -350,12 +179,9 @@ export const MaterialsTable = ({
     }
   };
 
-  // 获取项目的材料状态（根据厚度规格ID）
-  const getProjectMaterialStatus = (projectId: number, thicknessSpecId: number) => {
-    const proj = getProjectsList().find(p => p.id === projectId);
-    if (!proj || !proj.materials) return 'empty';
-    const material = proj.materials.find(m => m.thicknessSpecId === thicknessSpecId);
-    return (material?.status || 'empty') as StatusType;
+  // 获取项目的材料状态（根据厚度规格ID）- 使用共享逻辑
+  const getProjectMaterialStatusForTable = (projectId: number, thicknessSpecId: number) => {
+    return getProjectMaterialStatus(getProjectsList(), projectId, thicknessSpecId);
   };
 
   // 获取项目的材料信息
@@ -365,7 +191,7 @@ export const MaterialsTable = ({
     return proj.materials.find(m => m.thicknessSpecId === thicknessSpecId) || null;
   };
 
-  // 显示项目列表（格式：序号-项目名-工人-2mm-3mm-4mm...-备注-开始时间-完成时间-图纸）
+  // 显示项目列表（格式：序号-项目名-工人-2mm-3mm-4mm...-创建时间-开始时间-完成时间-图纸）
   const renderProjectsTable = () => {
     const projectsToShow = selectedProjectId ? getProjectsList().filter(p => p.id === selectedProjectId) : getProjectsList();
     
@@ -395,7 +221,7 @@ export const MaterialsTable = ({
                     {spec.thickness}{spec.unit}
                   </th>
                 ))}
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">备注</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">创建时间</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">开始时间</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">完成时间</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">图纸</th>
@@ -404,8 +230,59 @@ export const MaterialsTable = ({
             </thead>
             <tbody className="divide-y divide-gray-200">
               {projectsToShow.map((proj, index) => {
-                // 获取该项目的第一个材料的时间信息（作为项目级别的时间显示）
-                const firstMaterial = proj.materials && proj.materials.length > 0 ? proj.materials[0] : null;
+                // 获取项目开始时间：第一个进入in_progress状态的材料时间
+                const getProjectStartTime = (project: Project): string | null => {
+                  if (!project.materials || project.materials.length === 0) return null;
+                  
+                  // 筛选出有startDate且状态为in_progress或completed的材料
+                  const materialsWithStartDate = project.materials.filter(material => 
+                    material.startDate && (material.status === 'in_progress' || material.status === 'completed')
+                  );
+                  
+                  if (materialsWithStartDate.length === 0) return null;
+                  
+                  // 找到最早的startDate
+                  const earliestStartDate = materialsWithStartDate.reduce((earliest, current) => {
+                    if (!earliest.startDate) return current;
+                    if (!current.startDate) return earliest;
+                    return new Date(current.startDate) < new Date(earliest.startDate) ? current : earliest;
+                  });
+                  
+                  return earliestStartDate.startDate || null;
+                };
+
+                const projectStartTime = getProjectStartTime(proj);
+                
+                // 获取项目完成时间：最后一个completed材料的时间，但如果有未完成任务则清空
+                const getProjectCompletedTime = (project: Project): string | null => {
+                  if (!project.materials || project.materials.length === 0) return null;
+                  
+                  // 检查是否有未完成的材料（in_progress或pending状态）
+                  const hasIncompleteTask = project.materials.some(material => 
+                    material.status === 'in_progress' || material.status === 'pending'
+                  );
+                  
+                  // 如果有未完成任务，返回null（显示-）
+                  if (hasIncompleteTask) return null;
+                  
+                  // 获取所有已完成材料中有completedDate的材料
+                  const completedMaterials = project.materials.filter(material => 
+                    material.status === 'completed' && material.completedDate
+                  );
+                  
+                  if (completedMaterials.length === 0) return null;
+                  
+                  // 找到最晚的completedDate
+                  const latestCompletedDate = completedMaterials.reduce((latest, current) => {
+                    if (!latest.completedDate) return current;
+                    if (!current.completedDate) return latest;
+                    return new Date(current.completedDate) > new Date(latest.completedDate) ? current : latest;
+                  });
+                  
+                  return latestCompletedDate.completedDate || null;
+                };
+
+                const projectCompletedTime = getProjectCompletedTime(proj);
                 
                 return (
                   <motion.tr
@@ -437,7 +314,7 @@ export const MaterialsTable = ({
                     
                     {/* 厚度状态列 */}
                     {thicknessSpecs.map(spec => {
-                      const materialStatus = getProjectMaterialStatus(proj.id, spec.id);
+                      const materialStatus = getProjectMaterialStatusForTable(proj.id, spec.id);
                       
                       return (
                         <td key={spec.id} className="px-3 py-4 text-center">
@@ -453,24 +330,42 @@ export const MaterialsTable = ({
                       );
                     })}
                     
-                    {/* 备注 */}
+                    {/* 创建时间 */}
                     <td className="px-4 py-4">
-                      <div className="text-sm text-text-primary max-w-32 truncate">
-                        {firstMaterial?.notes || '-'}
+                      <div className="text-sm text-text-primary">
+                        {proj.createdAt ? new Date(proj.createdAt).toLocaleString('zh-CN', {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        }) : '-'}
                       </div>
                     </td>
                     
                     {/* 开始时间 */}
                     <td className="px-4 py-4">
                       <div className="text-sm text-text-primary">
-                        {firstMaterial?.startDate || '-'}
+                        {projectStartTime ? new Date(projectStartTime).toLocaleString('zh-CN', {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        }) : '-'}
                       </div>
                     </td>
                     
                     {/* 完成时间 */}
                     <td className="px-4 py-4">
                       <div className="text-sm text-text-primary">
-                        {firstMaterial?.completedDate || '-'}
+                        {projectCompletedTime ? new Date(projectCompletedTime).toLocaleString('zh-CN', {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        }) : '-'}
                       </div>
                     </td>
                     

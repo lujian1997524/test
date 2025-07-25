@@ -1,8 +1,9 @@
 const express = require('express');
-const { Project, Material, Drawing, ThicknessSpec, Worker, User } = require('../models');
+const { Project, Material, Drawing, ThicknessSpec, Worker, User, OperationHistory } = require('../models');
 const { Op } = require('sequelize');
 const { authenticate, requireOperator, requireAdmin } = require('../middleware/auth');
 const sseManager = require('../utils/sseManager');
+const { recordProjectUpdate, recordProjectCreate, recordProjectDelete } = require('../utils/operationHistory');
 
 const router = express.Router();
 
@@ -494,6 +495,24 @@ router.post('/', authenticate, requireOperator, async (req, res) => {
       ]
     });
 
+    // 记录操作历史
+    try {
+      await recordProjectCreate(
+        project.id,
+        {
+          name: project.name,
+          description: project.description,
+          status: project.status,
+          priority: project.priority,
+          assignedWorkerId: project.assignedWorkerId
+        },
+        req.user.id,
+        req.user.name
+      );
+    } catch (historyError) {
+      console.error('记录项目创建历史失败:', historyError);
+    }
+
     res.status(201).json({
       message: '项目创建成功',
       project: newProject
@@ -535,8 +554,21 @@ router.put('/:id', authenticate, requireOperator, async (req, res) => {
       });
     }
 
-    // 保存原始项目状态用于比较
-    const originalStatus = project.status;
+    // 保存原始项目状态用于比较和历史记录
+    const originalData = {
+      status: project.status,
+      priority: project.priority,
+      name: project.name,
+      assignedWorkerId: project.assignedWorkerId
+    };
+
+    // 获取原始工人信息
+    let originalWorker = null;
+    if (project.assignedWorkerId) {
+      originalWorker = await Worker.findByPk(project.assignedWorkerId, {
+        attributes: ['name']
+      });
+    }
 
     const updateData = {};
     if (name) updateData.name = name.trim();
@@ -563,23 +595,57 @@ router.put('/:id', authenticate, requireOperator, async (req, res) => {
       ]
     });
 
+    // 记录操作历史（如果有更改）
+    const changes = {};
+    if (status && status !== originalData.status) {
+      changes.status = status;
+      changes.oldStatus = originalData.status;
+    }
+    if (priority && priority !== originalData.priority) {
+      changes.priority = priority;
+      changes.oldPriority = originalData.priority;
+    }
+    if (name && name.trim() !== originalData.name) {
+      changes.name = name.trim();
+      changes.oldName = originalData.name;
+    }
+    if (assignedWorkerId !== undefined && assignedWorkerId !== originalData.assignedWorkerId) {
+      changes.assignedWorkerId = assignedWorkerId;
+      changes.oldWorkerName = originalWorker?.name;
+      changes.newWorkerName = updatedProject.assignedWorker?.name;
+    }
+
+    if (Object.keys(changes).length > 0) {
+      try {
+        await recordProjectUpdate(
+          id,
+          updatedProject.name,
+          changes,
+          req.user.id,
+          req.user.name
+        );
+      } catch (historyError) {
+        console.error('记录项目更新历史失败:', historyError);
+      }
+    }
+
     res.json({
       message: '项目更新成功',
       project: updatedProject
     });
 
     // 如果项目状态发生变化，发送SSE事件
-    if (status && status !== originalStatus) {
+    if (status && status !== originalData.status) {
       try {
         sseManager.broadcast('project-status-changed', {
           project: updatedProject,
-          oldStatus: originalStatus,
+          oldStatus: originalData.status,
           newStatus: status,
           userName: req.user.name,
           userId: req.user.id
         }, req.user.id);
         
-        console.log(`SSE事件已发送: 项目状态变更 - ${updatedProject.name} (${originalStatus} → ${status})`);
+        console.log(`SSE事件已发送: 项目状态变更 - ${updatedProject.name} (${originalData.status} → ${status})`);
       } catch (sseError) {
         console.error('发送SSE事件失败:', sseError);
       }
@@ -607,11 +673,23 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
       });
     }
 
-    // 保存项目信息用于SSE事件
+    // 保存项目信息用于SSE事件和历史记录
     const projectInfo = {
       id: project.id,
       name: project.name
     };
+
+    // 记录操作历史（在删除前记录）
+    try {
+      await recordProjectDelete(
+        project.id,
+        project.name,
+        req.user.id,
+        req.user.name
+      );
+    } catch (historyError) {
+      console.error('记录项目删除历史失败:', historyError);
+    }
 
     await project.destroy();
 
@@ -711,6 +789,66 @@ router.post('/:id/materials', authenticate, requireOperator, async (req, res) =>
     console.error('添加项目板材错误:', error);
     res.status(500).json({
       error: '添加项目板材失败',
+      message: error.message
+    });
+  }
+});
+
+// 获取项目操作历史
+router.get('/:id/history', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { page = 1, limit = 20, operationType } = req.query;
+
+    const project = await Project.findByPk(id);
+    if (!project) {
+      return res.status(404).json({
+        error: '项目不存在'
+      });
+    }
+
+    const whereClause = {
+      projectId: id
+    };
+
+    // 按操作类型筛选
+    if (operationType) {
+      whereClause.operationType = operationType;
+    }
+
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    const { count, rows: history } = await OperationHistory.findAndCountAll({
+      where: whereClause,
+      include: [
+        {
+          association: 'operator',
+          attributes: ['id', 'name', 'role']
+        },
+        {
+          association: 'project',
+          attributes: ['id', 'name']
+        }
+      ],
+      order: [['created_at', 'DESC']],
+      limit: parseInt(limit),
+      offset
+    });
+
+    res.json({
+      history,
+      pagination: {
+        total: count,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(count / parseInt(limit))
+      }
+    });
+
+  } catch (error) {
+    console.error('获取项目操作历史错误:', error);
+    res.status(500).json({
+      error: '获取项目操作历史失败',
       message: error.message
     });
   }

@@ -5,6 +5,7 @@ const Project = require('./Project');
 const Material = require('./Material');
 const Drawing = require('./Drawing');
 const ThicknessSpec = require('./ThicknessSpec');
+const OperationHistory = require('./OperationHistory');
 
 // 定义模型关联关系
 
@@ -107,6 +108,28 @@ ThicknessSpec.hasMany(Material, {
   as: 'materials'
 });
 
+// OperationHistory 关联
+OperationHistory.belongsTo(Project, {
+  foreignKey: 'projectId',
+  as: 'project'
+});
+
+OperationHistory.belongsTo(User, {
+  foreignKey: 'operatedBy',
+  as: 'operator'
+});
+
+Project.hasMany(OperationHistory, {
+  foreignKey: 'projectId',
+  as: 'operationHistory',
+  onDelete: 'CASCADE'
+});
+
+User.hasMany(OperationHistory, {
+  foreignKey: 'operatedBy',
+  as: 'operationHistory'
+});
+
 // 导出所有模型
 module.exports = {
   User,
@@ -114,5 +137,6 @@ module.exports = {
   Project,
   Material,
   Drawing,
-  ThicknessSpec
+  ThicknessSpec,
+  OperationHistory
 };

@@ -2,6 +2,7 @@ const express = require('express');
 const { Material, ThicknessSpec, Project, Worker } = require('../models');
 const { authenticate, requireOperator } = require('../middleware/auth');
 const sseManager = require('../utils/sseManager');
+const { recordMaterialUpdate } = require('../utils/operationHistory');
 
 const router = express.Router();
 
@@ -200,6 +201,26 @@ router.put('/:id', authenticate, requireOperator, async (req, res) => {
     if (startDate !== undefined) updateData.startDate = startDate;
     if (completedDate !== undefined) updateData.completedDate = completedDate;
 
+    // 记录操作历史
+    if (status && status !== material.status) {
+      try {
+        await recordMaterialUpdate(
+          material.projectId,
+          {
+            id: material.id,
+            thicknessSpecId: material.thicknessSpecId,
+            thicknessSpec: material.thicknessSpec
+          },
+          material.status,
+          status,
+          req.user.id,
+          req.user.name
+        );
+      } catch (historyError) {
+        console.error('记录材料更新历史失败:', historyError);
+      }
+    }
+
     await material.update(updateData);
 
     // 获取更新后的完整信息
@@ -286,6 +307,24 @@ router.delete('/:id', authenticate, requireOperator, async (req, res) => {
       materialType: material.thicknessSpec?.thickness + material.thicknessSpec?.unit,
       oldStatus: material.status
     };
+
+    // 记录操作历史（删除操作）
+    try {
+      await recordMaterialUpdate(
+        material.projectId,
+        {
+          id: material.id,
+          thicknessSpecId: material.thicknessSpecId,
+          thicknessSpec: material.thicknessSpec
+        },
+        material.status,
+        'empty',
+        req.user.id,
+        req.user.name
+      );
+    } catch (historyError) {
+      console.error('记录材料删除历史失败:', historyError);
+    }
 
     await material.destroy();
 

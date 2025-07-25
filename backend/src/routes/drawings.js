@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs').promises;
 const { Drawing, Project, User } = require('../models');
 const { authenticate } = require('../middleware/auth');
+const { recordDrawingUpload } = require('../utils/operationHistory');
 
 // 配置文件上传存储
 const storage = multer.diskStorage({
@@ -179,6 +180,18 @@ router.post('/project/:projectId/upload', authenticate, upload.single('drawing')
         }
       ]
     });
+
+    // 记录操作历史
+    try {
+      await recordDrawingUpload(
+        projectId,
+        fullDrawing,
+        req.user.id,
+        req.user.name
+      );
+    } catch (historyError) {
+      console.error('记录图纸上传历史失败:', historyError);
+    }
 
     res.status(201).json({
       success: true,
