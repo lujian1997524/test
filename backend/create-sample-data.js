@@ -68,7 +68,7 @@ async function createSampleData() {
         quantity: 10,
         status: 'completed',
         completedDate: new Date(),
-        completedBy: workers.length > 0 ? workers[0].id : null,
+        completedBy: workers.length > 0 ? workers[0].id : null, // 使用工人ID而不是用户ID
         notes: '外壳侧板'
       },
       {
@@ -76,6 +76,7 @@ async function createSampleData() {
         thicknessSpecId: thicknessSpecs[2].id, // 2.0mm 不锈钢
         quantity: 5,
         status: 'in_progress',
+        startDate: new Date(),
         notes: '底板'
       },
       {

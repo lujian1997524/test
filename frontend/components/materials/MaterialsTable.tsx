@@ -3,10 +3,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
-import { useMaterialStore, useProjectStore } from '@/stores';
-import { StatusToggle } from '@/components/ui';
+import { useMaterialStore, useProjectStore, type ProjectState } from '@/stores';
+import { StatusToggle, DrawingHoverCard } from '@/components/ui';
 import type { StatusType } from '@/components/ui';
 import { ArchiveBoxIcon } from '@heroicons/react/24/outline';
+import cadFileHandler from '@/utils/cadFileHandler';
 import { 
   updateMaterialStatusShared, 
   getProjectMaterialStatus 
@@ -37,26 +38,18 @@ interface Drawing {
   id: number;
   projectId: number;
   filename: string;
+  originalFilename?: string;
+  filePath: string;
   version: string;
   createdAt: string;
-}
-
-interface Project {
-  id: number;
-  name: string;
-  status: string;
-  priority: string;
-  createdAt: string;
-  creator?: { id: number; name: string };
-  assignedWorker?: { id: number; name: string };
-  materials: Material[];
-  drawings: Drawing[];
 }
 
 interface MaterialsTableProps {
   selectedProjectId: number | null;
   onProjectSelect: (id: number | null) => void;
   viewType?: 'active' | 'completed';
+  workerNameFilter?: string;
+  thicknessFilter?: string;
   className?: string;
 }
 
@@ -64,6 +57,8 @@ export const MaterialsTable = ({
   selectedProjectId, 
   onProjectSelect, 
   viewType = 'active',
+  workerNameFilter = '',
+  thicknessFilter = '',
   className = '' 
 }: MaterialsTableProps) => {
   const [thicknessSpecs, setThicknessSpecs] = useState<ThicknessSpec[]>([]);
@@ -72,18 +67,53 @@ export const MaterialsTable = ({
   const [tempNotes, setTempNotes] = useState('');
   const [movingToPast, setMovingToPast] = useState<number | null>(null);
   const [restoringFromPast, setRestoringFromPast] = useState<number | null>(null);
+  
+  // 添加hover预览相关状态
+  const [hoverCard, setHoverCard] = useState<{
+    isVisible: boolean;
+    position: { x: number; y: number };
+    drawings: Drawing[];
+  }>({
+    isVisible: false,
+    position: { x: 0, y: 0 },
+    drawings: []
+  });
+  
   const { token, user } = useAuth();
   const { updateMaterialStatus } = useMaterialStore();
   const { projects, completedProjects, pastProjects, updateProject, fetchProjects, moveToPastProject, restoreFromPastProject } = useProjectStore();
 
-  // 根据视图类型获取对应的项目列表
-  const getProjectsList = () => {
+  // 根据视图类型获取对应的项目列表，并应用筛选
+  const getProjectsList = (): ProjectState[] => {
+    let projectList: ProjectState[];
+    
     switch (viewType) {
       case 'completed':
-        return pastProjects; // 使用过往项目数据
+        projectList = pastProjects; // 使用过往项目数据
+        break;
       default:
-        return projects;
+        projectList = projects;
+        break;
     }
+    
+    // 应用工人姓名筛选
+    if (workerNameFilter) {
+      projectList = projectList.filter(project => 
+        project.assignedWorker?.name === workerNameFilter
+      );
+    }
+    
+    // 应用板材厚度筛选 - 只要项目包含指定厚度的板材就显示
+    if (thicknessFilter) {
+      projectList = projectList.filter(project => {
+        // 检查项目是否有指定厚度的材料
+        return project.materials?.some(material => 
+          material.thicknessSpec?.thickness === thicknessFilter
+        ) || false;
+      });
+    }
+    
+    return projectList;
   };
 
   // 如果还没有加载厚度规格，先加载
@@ -96,7 +126,6 @@ export const MaterialsTable = ({
   // 监听材料更新事件，刷新项目数据
   useEffect(() => {
     const handleMaterialsUpdate = (event: CustomEvent) => {
-      console.log('📋 MaterialsTable 收到材料更新事件:', event.detail);
       // 刷新项目数据以获取最新的材料状态
       fetchProjects();
     };
@@ -127,10 +156,8 @@ export const MaterialsTable = ({
 
   // 更新材料状态 - 使用共享逻辑
   const updateMaterialStatusInTable = async (projectId: number, thicknessSpecId: number, newStatus: StatusType) => {
-    console.log(`🎯 材料状态更新开始: 项目${projectId}, 厚度规格${thicknessSpecId}, 新状态${newStatus}`);
-    
     const success = await updateMaterialStatusShared(projectId, thicknessSpecId, newStatus, {
-      projects: getProjectsList(),
+      projects: getProjectsList() as any[],
       thicknessSpecs,
       user,
       updateProjectFn: updateProject,
@@ -181,7 +208,7 @@ export const MaterialsTable = ({
 
   // 获取项目的材料状态（根据厚度规格ID）- 使用共享逻辑
   const getProjectMaterialStatusForTable = (projectId: number, thicknessSpecId: number) => {
-    return getProjectMaterialStatus(getProjectsList(), projectId, thicknessSpecId);
+    return getProjectMaterialStatus(getProjectsList() as any[], projectId, thicknessSpecId);
   };
 
   // 获取项目的材料信息
@@ -189,6 +216,60 @@ export const MaterialsTable = ({
     const proj = getProjectsList().find(p => p.id === projectId);
     if (!proj || !proj.materials) return null;
     return proj.materials.find(m => m.thicknessSpecId === thicknessSpecId) || null;
+  };
+
+  // 处理图纸hover预览
+  const handleDrawingHover = (event: React.MouseEvent, drawings: Drawing[]) => {
+    if (drawings.length === 0) return;
+    
+    const rect = event.currentTarget.getBoundingClientRect();
+    setHoverCard({
+      isVisible: true,
+      position: {
+        x: rect.right + 10,
+        y: rect.top
+      },
+      drawings
+    });
+  };
+
+  // 关闭hover预览
+  const handleCloseHover = () => {
+    setHoverCard({
+      isVisible: false,
+      position: { x: 0, y: 0 },
+      drawings: []
+    });
+  };
+
+  // 处理打开图纸
+  const handleOpenDrawing = async (drawing: Drawing) => {
+    try {
+      const fileName = drawing.originalFilename || drawing.filename;
+      const cadCheck = await cadFileHandler.isCADFile(fileName);
+      
+      if (cadCheck.isCADFile) {
+        // 使用CAD软件打开
+        const result = await cadFileHandler.openCADFile(drawing.filePath);
+        if (!result.success) {
+          alert(`打开图纸失败: ${result.error}`);
+        }
+      } else {
+        // 非CAD文件，使用默认方式打开
+        if (cadFileHandler.isElectronEnvironment() && window.electronAPI && window.electronAPI.openFile) {
+          await window.electronAPI.openFile(drawing.filePath);
+        } else {
+          // 网页环境下载文件
+          window.open(`/api/drawings/${drawing.id}/download`, '_blank');
+        }
+      }
+      
+      // 关闭预览卡片
+      handleCloseHover();
+    } catch (error) {
+      console.error('打开图纸失败:', error);
+      alert('打开图纸失败');
+    }
   };
 
   // 显示项目列表（格式：序号-项目名-工人-2mm-3mm-4mm...-创建时间-开始时间-完成时间-图纸）
@@ -231,7 +312,7 @@ export const MaterialsTable = ({
             <tbody className="divide-y divide-gray-200">
               {projectsToShow.map((proj, index) => {
                 // 获取项目开始时间：第一个进入in_progress状态的材料时间
-                const getProjectStartTime = (project: Project): string | null => {
+                const getProjectStartTime = (project: ProjectState): string | null => {
                   if (!project.materials || project.materials.length === 0) return null;
                   
                   // 筛选出有startDate且状态为in_progress或completed的材料
@@ -254,7 +335,7 @@ export const MaterialsTable = ({
                 const projectStartTime = getProjectStartTime(proj);
                 
                 // 获取项目完成时间：最后一个completed材料的时间，但如果有未完成任务则清空
-                const getProjectCompletedTime = (project: Project): string | null => {
+                const getProjectCompletedTime = (project: ProjectState): string | null => {
                   if (!project.materials || project.materials.length === 0) return null;
                   
                   // 检查是否有未完成的材料（in_progress或pending状态）
@@ -374,12 +455,39 @@ export const MaterialsTable = ({
                       <div className="flex items-center space-x-1">
                         {proj.drawings && proj.drawings.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
-                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                            <span 
+                              className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded cursor-pointer hover:bg-blue-200 transition-colors"
+                              onMouseEnter={(e) => handleDrawingHover(e, (proj.drawings as any[]).map(d => ({
+                                id: d.id,
+                                projectId: d.projectId,
+                                filename: d.filename,
+                                originalFilename: d.originalFilename,
+                                filePath: d.filePath,
+                                version: d.version,
+                                createdAt: d.createdAt
+                              })))}
+                              onMouseLeave={handleCloseHover}
+                              onClick={() => onProjectSelect(proj.id)}
+                              title={`查看 ${proj.name} 的图纸详情`}
+                            >
                               {proj.drawings.length}个
                             </span>
+                            <button 
+                              onClick={() => onProjectSelect(proj.id)}
+                              className="text-xs text-green-600 hover:text-green-800 hover:bg-green-50 px-1 py-1 rounded transition-colors"
+                              title={`为项目 ${proj.name} 添加更多图纸`}
+                            >
+                              +
+                            </button>
                           </div>
                         ) : (
-                          <span className="text-xs text-text-secondary">无</span>
+                          <button 
+                            onClick={() => onProjectSelect(proj.id)}
+                            className="text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded transition-colors"
+                            title={`为项目 ${proj.name} 上传图纸`}
+                          >
+                            + 上传图纸
+                          </button>
                         )}
                       </div>
                     </td>
@@ -440,6 +548,15 @@ export const MaterialsTable = ({
             </div>
           )}
         </div>
+        
+        {/* 图纸预览卡片 */}
+        <DrawingHoverCard
+          drawings={hoverCard.drawings}
+          isVisible={hoverCard.isVisible}
+          position={hoverCard.position}
+          onClose={handleCloseHover}
+          onOpenDrawing={handleOpenDrawing}
+        />
       </div>
     );
   };

@@ -1,6 +1,7 @@
 // 模型导入
 const User = require('./User');
 const Worker = require('./Worker');
+const Department = require('./Department');
 const Project = require('./Project');
 const Material = require('./Material');
 const Drawing = require('./Drawing');
@@ -34,6 +35,17 @@ User.hasMany(Project, {
 Worker.hasMany(Project, {
   foreignKey: 'assignedWorkerId',
   as: 'assignedProjects'
+});
+
+Worker.belongsTo(Department, {
+  foreignKey: 'departmentId',
+  as: 'departmentInfo'
+});
+
+// Department 关联
+Department.hasMany(Worker, {
+  foreignKey: 'departmentId',
+  as: 'workers'
 });
 
 User.hasMany(Material, {
@@ -134,6 +146,7 @@ User.hasMany(OperationHistory, {
 module.exports = {
   User,
   Worker,
+  Department,
   Project,
   Material,
   Drawing,

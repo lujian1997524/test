@@ -56,6 +56,14 @@ router.get('/', authenticate, async (req, res) => {
         {
           association: 'materials',
           include: ['thicknessSpec']
+        },
+        {
+          association: 'drawings',
+          attributes: ['id', 'filename', 'originalFilename', 'filePath', 'version', 'createdAt', 'isCurrentVersion'],
+          include: [{
+            association: 'uploader',
+            attributes: ['id', 'name']
+          }]
         }
       ],
       order: [['priority', 'DESC'], ['createdAt', 'DESC']],
@@ -110,6 +118,14 @@ router.get('/completed', authenticate, async (req, res) => {
       {
         association: 'materials',
         include: ['thicknessSpec']
+      },
+      {
+        association: 'drawings',
+        attributes: ['id', 'filename', 'originalFilename', 'filePath', 'version', 'createdAt', 'isCurrentVersion'],
+        include: [{
+          association: 'uploader',
+          attributes: ['id', 'name']
+        }]
       }
     ];
 
@@ -195,6 +211,14 @@ router.get('/past', authenticate, async (req, res) => {
             association: 'thicknessSpec'
           }, {
             association: 'completedByUser',
+            attributes: ['id', 'name']
+          }]
+        },
+        {
+          association: 'drawings',
+          attributes: ['id', 'filename', 'originalFilename', 'filePath', 'version', 'createdAt', 'isCurrentVersion'],
+          include: [{
+            association: 'uploader',
             attributes: ['id', 'name']
           }]
         }
@@ -679,19 +703,29 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
       name: project.name
     };
 
-    // 记录操作历史（在删除前记录）
+    // 删除项目前，先删除相关的子记录以避免外键约束错误
     try {
-      await recordProjectDelete(
-        project.id,
-        project.name,
-        req.user.id,
-        req.user.name
-      );
+      // 删除项目相关的所有操作历史记录
+      await OperationHistory.destroy({
+        where: {
+          project_id: id
+        }
+      });
+      
+      console.log(`已删除项目 ${id} 的所有操作历史记录`);
     } catch (historyError) {
-      console.error('记录项目删除历史失败:', historyError);
+      console.error('删除项目操作历史失败:', historyError);
+      // 继续执行，不阻止项目删除
     }
 
     await project.destroy();
+
+    // 记录操作历史（在删除成功后记录到其他地方或日志）
+    try {
+      console.log(`项目删除成功: ${projectInfo.name} (ID: ${projectInfo.id}) 由用户 ${req.user.name} 删除`);
+    } catch (historyError) {
+      console.error('记录项目删除日志失败:', historyError);
+    }
 
     res.json({
       message: '项目删除成功'

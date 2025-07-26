@@ -115,7 +115,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <motion.div
       className={`${className}`}
-      animate={{ width: collapsed ? '64px' : '280px' }}
+      animate={{ width: collapsed ? '64px' : '150px' }}
       transition={{ duration: 0.3, ease: 'easeInOut' }}
     >
       <Card className="h-full" padding="md" glass={true}>

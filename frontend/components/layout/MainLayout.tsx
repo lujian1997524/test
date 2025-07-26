@@ -5,6 +5,8 @@ import { motion } from 'framer-motion'
 import { Header } from './Header'
 import { Sidebar, SidebarItem } from './Sidebar'
 import { NotificationContainer, SSEConnectionIndicator } from '@/components/ui/NotificationContainer'
+import { AudioSettingsButton } from '@/components/ui/AudioSettingsButton'
+import { Button } from '@/components/ui'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { useProjectStore } from '@/stores'
 import { sseManager } from '@/utils/sseManager'
@@ -101,7 +103,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         {/* 侧边栏 - 响应式优化 */}
         {showSidebar && sidebarItems.length > 0 && (
           <motion.div
-            className="flex-shrink-0 w-72 lg:w-80 xl:w-96 p-2 lg:p-4 hidden md:block"
+            className="flex-shrink-0 w-40 lg:w-44 xl:w-48 p-2 lg:p-4 hidden md:block"
             initial={{ x: -20, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             transition={{ duration: 0.3 }}
@@ -130,14 +132,16 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                   <div className="flex items-center space-x-2">
                     {/* 移动端菜单按钮 */}
                     {showSidebar && sidebarItems.length > 0 && (
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={toggleSidebar}
-                        className="md:hidden p-1.5 rounded-md bg-white/70 border border-gray-200/50 hover:bg-gray-50 transition-all duration-200 active:scale-95"
+                        className="md:hidden bg-white/70 border border-gray-200/50 hover:bg-gray-50"
                       >
                         <svg className="w-4 h-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                         </svg>
-                      </button>
+                      </Button>
                     )}
                     <div>
                       <Header
@@ -184,9 +188,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             onClick={toggleSidebar}
           />
           <motion.div
-            className="absolute left-0 top-0 h-full w-72 bg-white shadow-2xl"
-            initial={{ x: -288 }}
-            animate={{ x: sidebarCollapsed ? -288 : 0 }}
+            className="absolute left-0 top-0 h-full w-40 bg-white shadow-2xl"
+            initial={{ x: -160 }}
+            animate={{ x: sidebarCollapsed ? -160 : 0 }}
             transition={{ duration: 0.3, ease: 'easeInOut' }}
           >
             <div className="p-2 h-full">
@@ -206,6 +210,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
       
       {/* SSE连接状态指示器 */}
       <SSEConnectionIndicator />
+      
+      {/* 音频设置按钮 */}
+      <AudioSettingsButton />
     </div>
   )
 }

@@ -4,6 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 严格遵守
 - 所有回复必须使用中文
 - 所有注释必须使用中文
+- 样式和 UI 尽可能使用/design-system的组件。
 ## 项目概述
 
 这是一个激光切割生产管理系统，专为公司内部使用而设计。系统支持部门间的生产计划协作，包含项目管理、板材状态追踪、图纸管理和工人资源管理等功能。

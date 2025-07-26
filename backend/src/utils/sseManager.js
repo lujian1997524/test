@@ -79,7 +79,10 @@ class SSEManager {
 
     for (const [userId, userClients] of this.clients) {
       // 跳过排除的用户（通常是触发事件的用户）
-      if (excludeUserId && userId === excludeUserId) {
+      // 确保类型一致性，将两个值都转换为字符串进行比较
+      console.log(`🔍 SSE广播比较: userId=${userId}(${typeof userId}), excludeUserId=${excludeUserId}(${typeof excludeUserId})`);
+      if (excludeUserId && String(userId) === String(excludeUserId)) {
+        console.log(`⏭️ 跳过用户 ${userId} (被排除)`);
         continue;
       }
 
@@ -100,7 +103,7 @@ class SSEManager {
       }
     }
 
-    console.log(`SSE广播: ${eventType}, 发送给${totalSent}个连接, 排除用户${excludeUserId}`);
+    console.log(`SSE广播: ${eventType}, 发送给${totalSent}个连接, 排除用户${excludeUserId} (userId类型: ${typeof excludeUserId})`);
     return totalSent;
   }
 

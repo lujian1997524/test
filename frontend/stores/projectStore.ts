@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { sseManager } from '@/utils/sseManager';
 
 // 材料状态类型
-interface MaterialState {
+export interface MaterialState {
   id: number;
   projectId: number;
   thicknessSpecId: number;
@@ -20,15 +20,15 @@ interface MaterialState {
 }
 
 // 项目状态类型
-interface ProjectState {
+export interface ProjectState {
   id: number;
   name: string;
   status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
   priority: 'low' | 'medium' | 'high';
-  assigned_worker_id?: number;
-  created_by: number;
-  created_at: string;
-  updated_at: string;
+  assignedWorkerId?: number;
+  createdBy: number;
+  createdAt: string;
+  updatedAt: string;
   // 扩展属性
   assignedWorker?: {
     id: number;
@@ -48,16 +48,22 @@ const getAuthToken = (): string | null => {
 let refreshTimer: NodeJS.Timeout | null = null;
 const debouncedRefresh = (fetchProjects: () => Promise<void>) => {
   if (refreshTimer) {
+    console.log('⏰ 清除之前的防抖定时器');
     clearTimeout(refreshTimer);
   }
   refreshTimer = setTimeout(() => {
     console.log('🔄 执行防抖刷新...');
-    fetchProjects();
+    fetchProjects().then(() => {
+      console.log('✅ 防抖刷新完成');
+    }).catch(error => {
+      console.error('❌ 防抖刷新失败:', error);
+    });
   }, 300); // 300ms防抖
+  console.log('⏰ 已设置新的防抖定时器，300ms后执行');
 };
 
 // 项目Store接口
-interface ProjectStore {
+export interface ProjectStore {
   // 状态
   projects: ProjectState[];
   completedProjects: ProjectState[];
@@ -543,8 +549,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     // 监听板材状态变更事件
     const materialStatusChangedHandler = (data: any) => {
       console.log('🔧 收到板材状态变更事件:', data);
+      console.log('🔧 当前项目数量:', get().projects.length);
       if (data.projectId) {
         set({ lastUpdated: Date.now() });
+        console.log('🔄 触发防抖刷新项目数据...');
         debouncedRefresh(get().fetchProjects);
         
         window.dispatchEvent(new CustomEvent('materials-updated', { 
@@ -555,6 +563,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
             newStatus: data.newStatus 
           } 
         }));
+        console.log('📡 已发送 materials-updated 事件');
       }
     };
 

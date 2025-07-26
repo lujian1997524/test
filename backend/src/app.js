@@ -12,10 +12,12 @@ const models = require('./models');
 const authRoutes = require('./routes/auth');
 const usersRoutes = require('./routes/users');
 const workersRoutes = require('./routes/workers');
+const departmentsRoutes = require('./routes/departments');
 const projectsRoutes = require('./routes/projects');
 const materialsRoutes = require('./routes/materials');
 const thicknessSpecsRoutes = require('./routes/thickness-specs');
 const drawingsRoutes = require('./routes/drawings');
+const dxfRoutes = require('./routes/dxf');
 const dashboardRoutes = require('./routes/dashboard');
 const searchRoutes = require('./routes/search');
 const sseRoutes = require('./routes/sse');
@@ -82,10 +84,12 @@ app.get('/api', (req, res) => {
       auth: '/api/auth',
       users: '/api/users',
       workers: '/api/workers',
+      departments: '/api/departments',
       projects: '/api/projects',
       materials: '/api/materials',
       thicknessSpecs: '/api/thickness-specs',
       drawings: '/api/drawings',
+      dxf: '/api/dxf',
       dashboard: '/api/dashboard',
       search: '/api/search',
       sse: '/api/sse'
@@ -97,10 +101,12 @@ app.get('/api', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/workers', workersRoutes);
+app.use('/api/departments', departmentsRoutes);
 app.use('/api/projects', projectsRoutes);
 app.use('/api/materials', materialsRoutes);
 app.use('/api/thickness-specs', thicknessSpecsRoutes);
 app.use('/api/drawings', drawingsRoutes);
+app.use('/api/dxf', dxfRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/sse', sseRoutes);

@@ -9,7 +9,7 @@ const Drawing = sequelize.define('Drawing', {
   },
   projectId: {
     type: DataTypes.INTEGER,
-    allowNull: false,
+    allowNull: true, // 改为允许空值，支持图纸库中的未关联图纸
     field: 'project_id',
     comment: '项目ID',
     references: {
@@ -80,6 +80,25 @@ const Drawing = sequelize.define('Drawing', {
     type: DataTypes.TEXT,
     allowNull: true,
     comment: '图纸描述'
+  },
+  status: {
+    type: DataTypes.ENUM('可用', '已废弃', '已归档'),
+    allowNull: false,
+    defaultValue: '可用',
+    comment: '图纸状态'
+  },
+  archivedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'archived_at',
+    comment: '归档时间'
+  },
+  isCommonPart: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    field: 'is_common_part',
+    comment: '是否为常用零件图纸'
   }
 }, {
   tableName: 'drawings',

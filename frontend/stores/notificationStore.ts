@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { sseManager, type NotificationMessage } from '@/utils/sseManager';
+import { audioManager } from '@/utils/audioManager';
 
 interface NotificationStore {
   // 状态
@@ -31,7 +32,6 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
     const existingNotification = state.notifications.find(n => n.id === notification.id);
     
     if (existingNotification) {
-      console.log('⚠️ 通知已存在，跳过重复添加:', notification.id);
       return;
     }
 
@@ -44,14 +44,20 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
     );
 
     if (duplicateNotification) {
-      console.log('⚠️ 发现重复内容通知，跳过添加:', notification.id);
       return;
     }
 
-    console.log('➕ 添加新通知:', notification.id);
     set(state => ({
       notifications: [...state.notifications, notification]
     }));
+    
+    // 智能选择并播放提示音
+    const soundType = audioManager.getNotificationSound(
+      notification.type, 
+      notification.title, 
+      notification.message
+    );
+    audioManager.playNotificationSound(soundType);
     
     // 如果设置了自动消失时间，添加定时器
     if (notification.duration && notification.duration > 0) {
@@ -84,26 +90,18 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
       // 防止重复注册通知回调
       const state = get();
       if (!state.notificationCallbackSetup) {
-        console.log('📢 注册通知回调...');
         sseManager.addNotificationCallback((notification) => {
           get().addNotification(notification);
         });
         set({ notificationCallbackSetup: true });
-      } else {
-        console.log('📢 通知回调已注册，跳过重复设置');
       }
 
       // 建立连接
       const success = await sseManager.connect(token);
       get().setSSEConnectionStatus(success);
       
-      if (success) {
-        console.log('✅ SSE连接建立成功');
-      }
-      
       return success;
     } catch (error) {
-      console.error('SSE连接失败:', error);
       get().setSSEConnectionStatus(false);
       return false;
     }

@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
-import { useProjectStore } from '@/stores';
-import { StatusToggle } from '@/components/ui';
+import { useProjectStore, type ProjectState } from '@/stores';
+import { StatusToggle, CADPreview, DxfPreviewModal, Card, Input } from '@/components/ui';
 import type { StatusType } from '@/components/ui';
 import cadFileHandler from '@/utils/cadFileHandler';
 import { 
@@ -91,8 +91,45 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
   const [uploadingDrawing, setUploadingDrawing] = useState(false);
   const [cadSoftwareInfo, setCADSoftwareInfo] = useState<string>('');
   const [thicknessSpecs, setThicknessSpecs] = useState<ThicknessSpec[]>([]);
+  const [previewDrawing, setPreviewDrawing] = useState<Drawing | null>(null);
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [projectNotes, setProjectNotes] = useState<string>('');
+  const [savingNotes, setSavingNotes] = useState(false);
   const { token, user } = useAuth();
   const { projects, updateProject, fetchProjects } = useProjectStore();
+
+  // 保存项目备注
+  const handleSaveNotes = async () => {
+    if (!project) return;
+    
+    setSavingNotes(true);
+    try {
+      const response = await fetch(`/api/projects/${projectId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          description: projectNotes,
+        }),
+      });
+
+      if (response.ok) {
+        // 更新本地项目数据
+        setProject(prev => prev ? { ...prev, description: projectNotes } : null);
+        // 刷新项目列表
+        fetchProjects();
+      } else {
+        alert('保存备注失败');
+      }
+    } catch (error) {
+      console.error('保存备注错误:', error);
+      alert('保存备注失败');
+    } finally {
+      setSavingNotes(false);
+    }
+  };
 
   // 处理操作历史详情文本显示
   const getOperationDetailsText = (record: OperationHistory): string => {
@@ -153,6 +190,7 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
       if (response.ok) {
         const data = await response.json();
         setProject(data.project);
+        setProjectNotes(data.project.description || '');
       } else {
         console.error('获取项目详情失败');
       }
@@ -191,7 +229,6 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
   // 监听材料更新事件，保持与主页面同步
   useEffect(() => {
     const handleMaterialsUpdate = (event: CustomEvent) => {
-      console.log('📋 ProjectDetail 收到材料更新事件:', event.detail);
       // 刷新项目数据以获取最新的材料状态
       fetchProjectDetail();
       fetchProjects();
@@ -244,7 +281,7 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
   // 更新材料状态 - 使用共享逻辑
   const updateMaterialStatus = async (thicknessSpecId: number, newStatus: StatusType) => {
     return await updateMaterialStatusShared(projectId, thicknessSpecId, newStatus, {
-      projects,
+      projects: projects as any[],
       thicknessSpecs,
       user,
       updateProjectFn: updateProject,
@@ -255,7 +292,7 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
 
   // 获取项目的材料状态（根据厚度规格ID）- 使用共享逻辑
   const getProjectMaterialStatusForUI = (thicknessSpecId: number): StatusType => {
-    return getProjectMaterialStatus(projects, projectId, thicknessSpecId);
+    return getProjectMaterialStatus(projects as any[], projectId, thicknessSpecId);
   };
 
   // 上传图纸
@@ -293,6 +330,18 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
     }
   };
 
+  // 预览图纸
+  const handlePreviewDrawing = (drawing: Drawing) => {
+    setPreviewDrawing(drawing);
+    setIsPreviewModalOpen(true);
+  };
+
+  // 关闭预览弹窗
+  const closePreviewModal = () => {
+    setIsPreviewModalOpen(false);
+    setPreviewDrawing(null);
+  };
+
   // 打开图纸
   const openDrawing = async (drawing: Drawing) => {
     try {
@@ -303,9 +352,7 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
       if (cadCheck.isCADFile) {
         // 使用CAD软件打开
         const result = await cadFileHandler.openCADFile(drawing.filePath);
-        if (result.success) {
-          console.log(`图纸已用 ${result.software} 打开`);
-        } else {
+        if (!result.success) {
           alert(`打开图纸失败: ${result.error}`);
         }
       } else {
@@ -612,6 +659,47 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
             </div>
           </div>
 
+          {/* 项目备注区域 */}
+          <Card className="bg-white border border-gray-200 shadow-sm" padding="none">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900">项目备注</h3>
+                  <p className="text-sm text-gray-600 mt-1">记录项目相关的重要备注信息</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-6">
+              <div className="space-y-4">
+                <div>
+                  <textarea
+                    className="w-full p-4 border border-gray-200 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50 focus:bg-white"
+                    rows={4}
+                    placeholder="在此输入项目备注信息..."
+                    value={projectNotes}
+                    onChange={(e) => setProjectNotes(e.target.value)}
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <motion.button 
+                    onClick={handleSaveNotes}
+                    disabled={savingNotes}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      savingNotes 
+                        ? 'bg-gray-400 text-white cursor-not-allowed' 
+                        : 'bg-blue-500 text-white hover:bg-blue-600 shadow-sm hover:shadow-md'
+                    }`}
+                    whileHover={savingNotes ? {} : { scale: 1.02 }}
+                    whileTap={savingNotes ? {} : { scale: 0.98 }}
+                  >
+                    {savingNotes ? '保存中...' : '保存备注'}
+                  </motion.button>
+                </div>
+              </div>
+            </div>
+          </Card>
+
           {/* 图纸管理部分 */}
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
             <div className="p-6 border-b border-gray-200">
@@ -625,7 +713,7 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
                     type="file"
                     id="drawing-upload"
                     className="hidden"
-                    accept=".dwg,.dxf,.pdf,.png,.jpg,.jpeg"
+                    accept=".dxf"
                     onChange={handleDrawingUpload}
                     disabled={uploadingDrawing}
                   />
@@ -655,15 +743,15 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
                   project.drawings.map(drawing => {
                     const fileName = drawing.originalFilename || drawing.filename;
                     const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
-                    const isCADFile = ['.dwg', '.dxf'].includes(`.${fileExtension}`);
+                    const isDXF = fileExtension === 'dxf';
                     
                     return (
                       <div key={drawing.id} className="bg-gray-50 rounded-lg p-4">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-start justify-between space-x-4">
                           <div className="flex-1">
-                            <div className="flex items-center space-x-3">
+                            <div className="flex items-center space-x-3 mb-3">
                               <div className="flex items-center space-x-2">
-                                {isCADFile ? (
+                                {isDXF ? (
                                   <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                   </svg>
@@ -672,8 +760,8 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                   </svg>
                                 )}
-                                {isCADFile && (
-                                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-medium">CAD</span>
+                                {isDXF && (
+                                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-medium">DXF</span>
                                 )}
                               </div>
                               <div>
@@ -684,12 +772,24 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
                               </div>
                             </div>
                           </div>
-                          <button
-                            onClick={() => openDrawing(drawing)}
-                            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
-                          >
-                            {isCADFile && cadFileHandler.isElectronEnvironment() ? '用CAD打开' : '打开'}
-                          </button>
+                          
+                          <div className="flex space-x-2">
+                            {isDXF && (
+                              <button
+                                onClick={() => handlePreviewDrawing(drawing)}
+                                className="px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm font-medium flex-shrink-0"
+                                title="预览DXF图纸"
+                              >
+                                预览
+                              </button>
+                            )}
+                            <button
+                              onClick={() => openDrawing(drawing)}
+                              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium flex-shrink-0"
+                            >
+                              {isDXF && cadFileHandler.isElectronEnvironment() ? '用CAD打开' : '打开'}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -738,6 +838,13 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
           </div>
         </div>
       </div>
+
+      {/* 图纸预览弹窗 */}
+      <DxfPreviewModal
+        drawing={previewDrawing}
+        isOpen={isPreviewModalOpen}
+        onClose={closePreviewModal}
+      />
     </div>
   );
 };

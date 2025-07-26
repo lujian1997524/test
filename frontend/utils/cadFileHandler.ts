@@ -2,8 +2,12 @@
 // 为渲染进程提供CAD文件检测和打开功能
 
 class CADFileHandler {
+  private isElectron: boolean;
+  private detectedSoftware: any[];
+  private supportedExtensions: string[];
+
   constructor() {
-    this.isElectron = typeof window !== 'undefined' && window.electronAPI;
+    this.isElectron = typeof window !== 'undefined' && window.electronAPI != undefined;
     this.detectedSoftware = [];
     this.supportedExtensions = [];
   }
@@ -19,7 +23,7 @@ class CADFileHandler {
     }
 
     try {
-      const result = await window.electronAPI.invoke('detect-cad-software');
+      const result = await window.electronAPI!.invoke('detect-cad-software');
       if (result.success) {
         this.detectedSoftware = result.software;
         this.supportedExtensions = result.supportedExtensions;
@@ -29,13 +33,13 @@ class CADFileHandler {
       console.error('检测CAD软件失败:', error);
       return {
         success: false,
-        error: error.message
+        error: (error as Error).message
       };
     }
   }
 
   // 打开CAD文件
-  async openCADFile(filePath) {
+  async openCADFile(filePath: string) {
     if (!this.isElectron) {
       // 在浏览器环境下，尝试下载文件
       try {
@@ -60,13 +64,13 @@ class CADFileHandler {
     }
 
     try {
-      const result = await window.electronAPI.invoke('open-cad-file', filePath);
+      const result = await window.electronAPI!.invoke('open-cad-file', filePath);
       return result;
     } catch (error) {
       console.error('打开CAD文件失败:', error);
       return {
         success: false,
-        error: error.message
+        error: (error as Error).message
       };
     }
   }
@@ -81,7 +85,7 @@ class CADFileHandler {
     }
 
     try {
-      const result = await window.electronAPI.invoke('get-detected-cad-software');
+      const result = await window.electronAPI!.invoke('get-detected-cad-software');
       if (result.success) {
         this.detectedSoftware = result.software;
         this.supportedExtensions = result.supportedExtensions;
@@ -90,16 +94,16 @@ class CADFileHandler {
     } catch (error) {
       return {
         success: false,
-        error: error.message
+        error: (error as Error).message
       };
     }
   }
 
   // 检查文件是否为CAD文件
-  async isCADFile(filePath) {
+  async isCADFile(filePath: string) {
     if (!this.isElectron) {
-      // 在浏览器环境下，通过文件扩展名简单判断
-      const cadExtensions = ['.dwg', '.dxf', '.step', '.stp', '.iges', '.igs', '.stl', '.obj'];
+      // 在浏览器环境下，仅支持DXF格式
+      const cadExtensions = ['.dxf'];
       const fileExtension = this.getFileExtension(filePath);
       
       return {
@@ -111,18 +115,18 @@ class CADFileHandler {
     }
 
     try {
-      const result = await window.electronAPI.invoke('is-cad-file', filePath);
+      const result = await window.electronAPI!.invoke('is-cad-file', filePath);
       return result;
     } catch (error) {
       return {
         success: false,
-        error: error.message
+        error: (error as Error).message
       };
     }
   }
 
   // 获取文件扩展名
-  getFileExtension(filePath) {
+  getFileExtension(filePath: string) {
     const lastDotIndex = filePath.lastIndexOf('.');
     return lastDotIndex !== -1 ? filePath.substring(lastDotIndex) : '';
   }
@@ -148,14 +152,14 @@ class CADFileHandler {
       return '未检测到CAD软件';
     }
 
-    const softwareNames = this.detectedSoftware.map(software => software.name);
+    const softwareNames = this.detectedSoftware.map((software: any) => software.name);
     return `检测到 ${softwareNames.length} 个CAD软件: ${softwareNames.join(', ')}`;
   }
 
   // 根据文件类型推荐CAD软件
-  recommendCADSoftware(fileExtension) {
+  recommendCADSoftware(fileExtension: string) {
     const ext = fileExtension.toLowerCase();
-    const compatibleSoftware = this.detectedSoftware.filter(software => 
+    const compatibleSoftware = this.detectedSoftware.filter((software: any) => 
       software.extensions && software.extensions.includes(ext)
     );
 
@@ -165,7 +169,7 @@ class CADFileHandler {
 
     // 优先推荐AutoCAD和CAXA
     const priority = ['autocad', 'caxa', 'solidworks', 'fusion360'];
-    compatibleSoftware.sort((a, b) => {
+    compatibleSoftware.sort((a: any, b: any) => {
       const aIndex = priority.indexOf(a.type);
       const bIndex = priority.indexOf(b.type);
       
@@ -185,3 +189,4 @@ const cadFileHandler = new CADFileHandler();
 
 // 导出供React组件使用
 export default cadFileHandler;
+export { cadFileHandler };

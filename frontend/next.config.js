@@ -16,9 +16,21 @@ const nextConfig = {
     ]
   },
   
+  // 配置WebSocket和热重载
+  webpack: (config, { dev, isServer }) => {
+    if (dev && !isServer) {
+      // 开发环境下配置HMR WebSocket
+      config.watchOptions = {
+        poll: 1000,
+        aggregateTimeout: 300,
+      }
+    }
+    return config
+  },
+  
   // 生产时导出静态文件供Electron使用
   output: process.env.NODE_ENV === 'production' ? 'export' : undefined,
-  distDir: 'out',
+  distDir: process.env.NODE_ENV === 'production' ? 'out' : '.next',
   images: {
     unoptimized: true
   }

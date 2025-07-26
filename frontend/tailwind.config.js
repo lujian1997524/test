@@ -88,7 +88,21 @@ module.exports = {
         '22': '5.5rem',
         '26': '6.5rem',
         '30': '7.5rem',
-      }
+      },
+      animation: {
+        'shimmer': 'shimmer 2s linear infinite',
+        'stripes': 'stripes 1s linear infinite',
+      },
+      keyframes: {
+        shimmer: {
+          '0%': { backgroundPosition: '-200% 0' },
+          '100%': { backgroundPosition: '200% 0' },
+        },
+        stripes: {
+          '0%': { backgroundPosition: '0 0' },
+          '100%': { backgroundPosition: '40px 0' },
+        },
+      },
     },
   },
   plugins: [],

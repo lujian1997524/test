@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useGlobalSyncStore } from '@/stores';
+import { Badge } from '@/components/ui';
 
 /**
  * 全局状态同步初始化组件
@@ -47,16 +48,20 @@ export const SyncStatusIndicator = () => {
   return (
     <div className="flex items-center space-x-2 text-sm">
       {/* 在线状态指示器 */}
-      <div className="flex items-center space-x-1">
+      <Badge
+        variant={isOnline ? 'success' : 'error'}
+        size="sm"
+        className="flex items-center space-x-1"
+      >
         <div 
           className={`w-2 h-2 rounded-full ${
             isOnline ? 'bg-green-500' : 'bg-red-500'
           }`}
         />
-        <span className={isOnline ? 'text-green-600' : 'text-red-600'}>
+        <span>
           {isOnline ? '在线' : '离线'}
         </span>
-      </div>
+      </Badge>
 
       {/* 最后同步时间 */}
       {isOnline && (
@@ -67,9 +72,14 @@ export const SyncStatusIndicator = () => {
 
       {/* 错误指示器 */}
       {syncErrors.length > 0 && (
-        <span className="text-orange-500 cursor-pointer" title={syncErrors.join('\n')}>
+        <Badge
+          variant="warning"
+          size="sm"
+          className="cursor-pointer"
+          title={syncErrors.join('\n')}
+        >
           ⚠️ {syncErrors.length}个同步问题
-        </span>
+        </Badge>
       )}
     </div>
   );

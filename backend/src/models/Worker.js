@@ -30,6 +30,15 @@ const Worker = sequelize.define('Worker', {
     allowNull: true,
     comment: '所属部门'
   },
+  departmentId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'departments',
+      key: 'id'
+    },
+    comment: '部门ID'
+  },
   position: {
     type: DataTypes.STRING(50),
     allowNull: true,

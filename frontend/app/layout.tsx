@@ -15,6 +15,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-CN">
+      <head>
+        <link rel="stylesheet" href="/dxf-fonts.css" />
+      </head>
       <body>
         <AuthProvider>
           <GlobalSyncInitializer />

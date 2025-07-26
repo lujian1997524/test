@@ -4,6 +4,7 @@ import { useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { motion } from 'framer-motion';
+import { Loading, Alert } from '@/components/ui';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -29,18 +30,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-bg-primary">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-center"
-        >
-          <motion.div
-            className="w-12 h-12 border-4 border-ios18-blue border-t-transparent rounded-full mx-auto mb-4"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          />
-          <p className="text-text-secondary">正在验证身份...</p>
-        </motion.div>
+        <Loading size="lg" text="正在验证身份..." />
       </div>
     );
   }
@@ -55,38 +45,39 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return (
       fallback || (
         <div className="min-h-screen flex items-center justify-center bg-bg-primary">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="text-center p-8"
+          <Alert
+            variant="error"
+            className="max-w-md text-center"
           >
-            <div className="w-16 h-16 bg-status-error rounded-full mx-auto mb-4 flex items-center justify-center">
-              <svg
-                className="w-8 h-8 text-white"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
-                />
-              </svg>
+            <div className="text-center">
+              <div className="w-16 h-16 bg-status-error rounded-full mx-auto mb-4 flex items-center justify-center">
+                <svg
+                  className="w-8 h-8 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
+                  />
+                </svg>
+              </div>
+              <h2 className="text-xl font-bold text-text-primary mb-2">
+                权限不足
+              </h2>
+              <p className="text-text-secondary mb-4">
+                您没有访问此页面的权限
+              </p>
+              <p className="text-sm text-text-secondary">
+                当前角色: {user?.role === 'admin' ? '管理员' : '操作员'}
+                <br />
+                需要角色: {requiredRole === 'admin' ? '管理员' : '操作员'}
+              </p>
             </div>
-            <h2 className="text-xl font-bold text-text-primary mb-2">
-              权限不足
-            </h2>
-            <p className="text-text-secondary mb-4">
-              您没有访问此页面的权限
-            </p>
-            <p className="text-sm text-text-secondary">
-              当前角色: {user?.role === 'admin' ? '管理员' : '操作员'}
-              <br />
-              需要角色: {requiredRole === 'admin' ? '管理员' : '操作员'}
-            </p>
-          </motion.div>
+          </Alert>
         </div>
       )
     );

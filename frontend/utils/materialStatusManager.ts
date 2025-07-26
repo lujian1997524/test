@@ -138,6 +138,28 @@ export const updateProjectStatusRealtime = async (
       await updateProjectFn(projectId, { status: newStatus as 'pending' | 'in_progress' | 'completed' | 'cancelled' });
       console.log(`项目 ${projectId} 状态更新成功`);
       
+      // 如果项目状态变为已完成，自动归档相关图纸
+      if (newStatus === 'completed') {
+        try {
+          const response = await fetch(`/api/drawings/archive-project/${projectId}`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${getAuthToken()}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            console.log(`项目 ${projectId} 图纸归档成功:`, result.message);
+          } else {
+            console.error(`项目 ${projectId} 图纸归档失败:`, await response.text());
+          }
+        } catch (archiveError) {
+          console.error(`项目 ${projectId} 图纸归档过程中发生错误:`, archiveError);
+        }
+      }
+      
       // 注意：SSE事件将由后端的项目更新路由自动发送，不需要在前端重复发送
       
     } catch (error) {
@@ -202,8 +224,23 @@ export const updateMaterialStatusShared = async (
           return false;
         }
       }
-      // 成功删除或本来就没有记录，项目状态会通过SSE事件自动更新
+      // 成功删除或本来就没有记录，更新项目状态并刷新本地数据
       await updateProjectStatusRealtime(projects, updateProjectFn, thicknessSpecs, projectId, thicknessSpecId, 'empty');
+      
+      // 立即刷新项目数据以更新本地UI
+      console.log('🔄 删除材料后立即刷新项目数据以更新本地UI');
+      await fetchProjectsFn();
+      
+      // 发送材料更新事件，保持组件间同步
+      window.dispatchEvent(new CustomEvent('materials-updated', { 
+        detail: { 
+          projectId, 
+          thicknessSpecId, 
+          newStatus: 'empty',
+          timestamp: Date.now()
+        } 
+      }));
+      
       return true;
     }
     
@@ -219,7 +256,7 @@ export const updateMaterialStatusShared = async (
 
       if (newStatus === 'completed') {
         updateData.completedDate = new Date().toISOString().split('T')[0];
-        updateData.completedBy = user?.id;
+        // 注意：不设置completedBy，因为数据库中该字段引用workers表，而user是users表
       }
 
       const response = await fetch(`/api/materials/${existingMaterial.id}`, {
@@ -248,7 +285,7 @@ export const updateMaterialStatusShared = async (
         createData.startDate = new Date().toISOString().split('T')[0];
       } else if (newStatus === 'completed') {
         createData.completedDate = new Date().toISOString().split('T')[0];
-        createData.completedBy = user?.id;
+        // 注意：不设置completedBy，因为数据库中该字段引用workers表，而user是users表
       }
 
       const createResponse = await fetch('/api/materials', {

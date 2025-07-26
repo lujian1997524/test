@@ -25,6 +25,8 @@ interface ProjectTreeProps {
   onRefresh?: () => void;
   refreshTrigger?: number;
   className?: string;
+  // 筛选参数
+  filteredProjects?: Project[];
 }
 
 export const ProjectTree: React.FC<ProjectTreeProps> = ({
@@ -35,7 +37,8 @@ export const ProjectTree: React.FC<ProjectTreeProps> = ({
   onDeleteProject,
   onRefresh,
   refreshTrigger = 0,
-  className = ''
+  className = '',
+  filteredProjects
 }) => {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['all']));
   const [selectedProjects, setSelectedProjects] = useState<Set<number>>(new Set());
@@ -44,12 +47,19 @@ export const ProjectTree: React.FC<ProjectTreeProps> = ({
   
   // 使用Zustand Store（明确订阅完整状态）
   const { 
-    projects, 
+    projects: storeProjects, 
     loading, 
     fetchProjects: originalFetchProjects, 
     lastUpdated,
     deleteProject
   } = useProjectStore();
+
+  // 获取用户权限
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+
+  // 使用传入的筛选项目或store中的项目
+  const projects = filteredProjects || storeProjects;
 
   // 包装fetchProjects以避免依赖问题
   const fetchProjects = useCallback(() => {
@@ -66,20 +76,15 @@ export const ProjectTree: React.FC<ProjectTreeProps> = ({
   };
 
   const handleProjectSelect = (projectId: number, isCheckbox = false) => {
-    console.log('🎯 项目选择:', projectId, '批量模式:', isBatchMode, '复选框:', isCheckbox);
-    
     if (isBatchMode || isCheckbox) {
       const newSelected = new Set(selectedProjects);
       if (newSelected.has(projectId)) {
         newSelected.delete(projectId);
-        console.log('❌ 取消选择项目:', projectId);
       } else {
         newSelected.add(projectId);
-        console.log('✅ 选择项目:', projectId);
       }
       setSelectedProjects(newSelected);
       setShowBatchActions(newSelected.size > 0);
-      console.log('📊 当前选择的项目:', Array.from(newSelected));
     } else {
       onProjectSelect(projectId);
     }
@@ -131,12 +136,6 @@ export const ProjectTree: React.FC<ProjectTreeProps> = ({
       alert('删除项目失败，请重试');
     }
   };
-
-  // 调试日志：监控projects变化
-  useEffect(() => {
-    console.log('🌳 ProjectTree - projects数组变化:', projects.length, projects.map(p => p.name));
-    console.log('🌳 ProjectTree - lastUpdated:', lastUpdated);
-  }, [projects, lastUpdated]);
 
   // 获取项目列表（仅在refreshTrigger变化时）
   useEffect(() => {
@@ -246,7 +245,7 @@ export const ProjectTree: React.FC<ProjectTreeProps> = ({
       {/* 标题区域 */}
       <div className="px-4 py-3 border-b border-gray-200">
         <div className="flex items-center justify-between">
-          <h2 className="font-semibold text-text-primary">
+          <h2 className="font-semibold text-text-primary text-sm">
             {isBatchMode ? `已选择 ${selectedProjects.size} 项` : '项目列表'}
           </h2>
           <div className="flex items-center space-x-2">
@@ -304,15 +303,17 @@ export const ProjectTree: React.FC<ProjectTreeProps> = ({
             exit={{ opacity: 0, y: -10 }}
             className="mt-3 flex items-center space-x-2"
           >
-            <button
-              onClick={handleBatchSoftDelete}
-              className="flex items-center px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm"
-            >
-              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-              删除
-            </button>
+            {isAdmin && (
+              <button
+                onClick={handleBatchSoftDelete}
+                className="flex items-center px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm"
+              >
+                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                删除
+              </button>
+            )}
           </motion.div>
         )}
       </div>
@@ -328,7 +329,7 @@ export const ProjectTree: React.FC<ProjectTreeProps> = ({
             >
               <div className="flex items-center space-x-2">
                 <div className="text-ios18-blue">{group.icon}</div>
-                <span className="font-medium text-text-primary">{group.label}</span>
+                <span className="font-medium text-text-primary text-sm">{group.label}</span>
                 <span className="text-xs bg-gray-100 text-text-secondary px-2 py-1 rounded-full">
                   {group.projects.length}
                 </span>
@@ -394,7 +395,7 @@ export const ProjectTree: React.FC<ProjectTreeProps> = ({
                               )}
                               {getStatusIcon(project.status)}
                               <div className="flex-1 min-w-0">
-                                <div className="font-medium truncate">
+                                <div className="font-medium truncate text-sm">
                                   {project.name}
                                 </div>
                                 <div className={`text-xs truncate ${
@@ -426,20 +427,22 @@ export const ProjectTree: React.FC<ProjectTreeProps> = ({
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                   </svg>
                                 </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleSingleSoftDelete(project.id);
-                                  }}
-                                  className={`p-1 rounded hover:bg-black/10 ${
-                                    selectedProjectId === project.id ? 'text-white' : 'text-red-500'
-                                  }`}
-                                  title="删除项目"
-                                >
-                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </button>
+                                {isAdmin && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleSingleSoftDelete(project.id);
+                                    }}
+                                    className={`p-1 rounded hover:bg-black/10 ${
+                                      selectedProjectId === project.id ? 'text-white' : 'text-red-500'
+                                    }`}
+                                    title="删除项目"
+                                  >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
+                                )}
                               </div>
                             )}
                           </div>
