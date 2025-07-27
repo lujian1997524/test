@@ -107,6 +107,14 @@ const Project = sequelize.define('Project', {
       model: 'users',
       key: 'id'
     }
+  },
+  // 排序相关字段
+  sortOrder: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+    field: 'sort_order',
+    comment: '排序顺序'
   }
 }, {
   tableName: 'projects',
@@ -135,6 +143,12 @@ const Project = sequelize.define('Project', {
     },
     {
       fields: ['deleted']
+    },
+    {
+      fields: ['sort_order']
+    },
+    {
+      fields: ['is_past_project', 'sort_order']
     }
   ]
 });

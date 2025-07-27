@@ -312,7 +312,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
                     
                     <div className="text-right">
                       <div className="text-sm font-medium text-text-secondary">
-                        v{drawing.version || '1.0'}
+                        v1.0
                       </div>
                     </div>
                   </div>

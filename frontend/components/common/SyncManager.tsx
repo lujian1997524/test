@@ -49,7 +49,7 @@ export const SyncStatusIndicator = () => {
     <div className="flex items-center space-x-2 text-sm">
       {/* 在线状态指示器 */}
       <Badge
-        variant={isOnline ? 'success' : 'error'}
+        variant={isOnline ? 'success' : 'danger'}
         size="sm"
         className="flex items-center space-x-1"
       >
@@ -76,7 +76,6 @@ export const SyncStatusIndicator = () => {
           variant="warning"
           size="sm"
           className="cursor-pointer"
-          title={syncErrors.join('\n')}
         >
           ⚠️ {syncErrors.length}个同步问题
         </Badge>

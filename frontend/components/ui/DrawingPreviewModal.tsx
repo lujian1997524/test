@@ -121,8 +121,8 @@ export const DrawingPreviewModal: React.FC<DrawingPreviewModalProps> = ({
                         width={window.innerWidth - 40} // 全屏宽度减去边距
                         height={window.innerHeight - 200} // 全屏高度减去标题栏和底栏
                         className="rounded-lg border border-gray-200 shadow-lg"
-                        enableInteraction={true} // 启用交互功能
-                        showToolbar={true} // 显示工具栏
+                        enableInteraction={false} // 禁用交互功能
+                        showToolbar={false} // 隐藏工具栏
                         onError={(error) => {
                           console.error('DXF预览失败:', error);
                         }}
@@ -134,8 +134,8 @@ export const DrawingPreviewModal: React.FC<DrawingPreviewModalProps> = ({
                       <div className="flex items-center justify-center" style={{ width: window.innerWidth - 40, height: window.innerHeight - 200 }}>
                         <div className="flex flex-col items-center space-y-4">
                           <div className="animate-spin rounded-full h-12 w-12 border-b-3 border-blue-500"></div>
-                          <span className="text-lg text-gray-600">准备高质量DXF预览中...</span>
-                          <span className="text-sm text-gray-400">支持缩放、平移和全屏预览</span>
+                          <span className="text-lg text-gray-600">准备图纸预览中...</span>
+                          <span className="text-sm text-gray-400">专业图纸查看</span>
                         </div>
                       </div>
                     )}
@@ -166,30 +166,8 @@ export const DrawingPreviewModal: React.FC<DrawingPreviewModalProps> = ({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
                     <div className="text-sm font-medium text-gray-700">
-                      {isDXF ? '高质量DXF图纸预览' : '文件信息预览'}
+                      {isDXF ? '专业图纸预览' : '文件信息预览'}
                     </div>
-                    {isDXF && (
-                      <div className="flex items-center space-x-2 text-xs text-gray-500">
-                        <span className="inline-flex items-center px-2 py-1 bg-green-100 text-green-700 rounded">
-                          <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                          </svg>
-                          支持缩放
-                        </span>
-                        <span className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-700 rounded">
-                          <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4m0 0l4-4m-4 4h18" />
-                          </svg>
-                          支持平移
-                        </span>
-                        <span className="inline-flex items-center px-2 py-1 bg-purple-100 text-purple-700 rounded">
-                          <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                          </svg>
-                          全屏模式
-                        </span>
-                      </div>
-                    )}
                   </div>
                   <div className="flex space-x-3">
                     <button

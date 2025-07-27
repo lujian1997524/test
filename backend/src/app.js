@@ -4,6 +4,9 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 require('dotenv').config();
 
+// 导入配置管理
+const { getConfig, logConfig } = require('./config/envConfig');
+
 // 导入数据库连接和模型
 const { testConnection } = require('./utils/database');
 const models = require('./models');
@@ -24,17 +27,25 @@ const sseRoutes = require('./routes/sse');
 
 const app = express();
 
+// 获取配置
+const config = getConfig();
+
 // 中间件配置
 app.use(helmet());
 
-// CORS配置 - 允许局域网内的跨域访问
+// CORS配置 - 使用环境配置管理
 app.use(cors({
   origin: function (origin, callback) {
     // 允许同源请求 (origin为undefined)
     if (!origin) return callback(null, true);
     
-    // 允许localhost和127.0.0.1
-    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+    // 检查是否在允许的源列表中
+    if (config.cors.origins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // 允许localhost和127.0.0.1的任意端口（开发环境）
+    if (config.isDevelopment && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
       return callback(null, true);
     }
     
@@ -50,7 +61,7 @@ app.use(cors({
       return callback(null, true);
     }
     
-    console.log('CORS blocked origin:', origin);
+    console.warn(`❌ CORS: 拒绝来源 ${origin}`);
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
@@ -128,15 +139,18 @@ app.use((err, req, res, next) => {
   });
 });
 
-const PORT = process.env.PORT || 35001;
+const PORT = config.server.PORT;
 
 // 启动服务器
-app.listen(PORT, '0.0.0.0', async () => {
+app.listen(PORT, config.server.HOST, async () => {
   console.log(`🚀 激光切割管理系统后端服务启动成功`);
-  console.log(`📡 HTTP API: http://localhost:${PORT}`);
-  console.log(`🌐 局域网访问: http://[YOUR_IP]:${PORT}`);
-  console.log(`🔍 健康检查: http://localhost:${PORT}/health`);
-  console.log(`📚 API文档: http://localhost:${PORT}/api`);
+  console.log(`📡 HTTP API: ${config.server.BACKEND_URL}`);
+  console.log(`🌐 局域网访问: ${config.server.BACKEND_URL}`);
+  console.log(`🔍 健康检查: ${config.server.BACKEND_URL}/health`);
+  console.log(`📚 API文档: ${config.server.BACKEND_URL}/api`);
+  
+  // 输出配置信息
+  logConfig();
   
   // 测试数据库连接
   await testConnection();

@@ -57,6 +57,7 @@ router.get('/stats', authenticate, async (req, res) => {
     // 厚度规格使用统计
     const thicknessUsage = await Material.findAll({
       attributes: [
+        'thicknessSpecId',
         [Material.sequelize.fn('COUNT', Material.sequelize.col('Material.id')), 'usage']
       ],
       include: [
@@ -67,7 +68,7 @@ router.get('/stats', authenticate, async (req, res) => {
         }
       ],
       group: ['thicknessSpecId', 'thicknessSpec.id'],
-      order: [[Material.sequelize.literal('usage'), 'DESC']],
+      order: [[Material.sequelize.fn('COUNT', Material.sequelize.col('Material.id')), 'DESC']],
       limit: 10
     });
 
@@ -81,11 +82,12 @@ router.get('/stats', authenticate, async (req, res) => {
       include: [
         {
           model: Project,
+          as: 'project',
           attributes: ['id', 'name']
         }
       ],
-      group: ['projectId', 'Project.id'],
-      order: [[Drawing.sequelize.literal('drawingCount'), 'DESC']],
+      group: ['projectId', 'project.id'],
+      order: [[Drawing.sequelize.fn('COUNT', Drawing.sequelize.col('Drawing.id')), 'DESC']],
       limit: 5
     });
 
@@ -238,7 +240,7 @@ router.get('/charts', authenticate, async (req, res) => {
     // 图纸上传趋势
     const drawingTrend = await Drawing.findAll({
       attributes: [
-        [Drawing.sequelize.fn('DATE', Drawing.sequelize.col('uploadTime')), 'date'],
+        [Drawing.sequelize.fn('DATE', Drawing.sequelize.col('upload_time')), 'date'],
         [Drawing.sequelize.fn('COUNT', Drawing.sequelize.col('id')), 'count']
       ],
       where: {
@@ -246,8 +248,8 @@ router.get('/charts', authenticate, async (req, res) => {
           [Op.gte]: startDate
         }
       },
-      group: [Drawing.sequelize.fn('DATE', Drawing.sequelize.col('uploadTime'))],
-      order: [[Drawing.sequelize.fn('DATE', Drawing.sequelize.col('uploadTime')), 'ASC']]
+      group: [Drawing.sequelize.fn('DATE', Drawing.sequelize.col('upload_time'))],
+      order: [[Drawing.sequelize.fn('DATE', Drawing.sequelize.col('upload_time')), 'ASC']]
     });
 
     res.json({

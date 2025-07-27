@@ -142,17 +142,35 @@ export const DrawingSearch: React.FC<DrawingSearchProps> = ({
           文件大小范围 (MB)
         </label>
         <div className="px-2">
-          <Slider
-            range
-            min={0}
-            max={100}
-            value={filters.sizeRange}
-            onChange={(value) => setFilters(prev => ({ ...prev, sizeRange: value as [number, number] }))}
-            className="w-full"
-          />
-          <div className="flex justify-between text-xs text-gray-500 mt-1">
-            <span>{filters.sizeRange[0]} MB</span>
-            <span>{filters.sizeRange[1]} MB</span>
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <label className="text-sm text-gray-600 min-w-[60px]">最小值:</label>
+              <Slider
+                min={0}
+                max={100}
+                value={filters.sizeRange[0]}
+                onChange={(value) => setFilters(prev => ({ 
+                  ...prev, 
+                  sizeRange: [value as number, prev.sizeRange[1]] 
+                }))}
+                className="flex-1"
+              />
+              <span className="text-xs text-gray-500 min-w-[40px]">{filters.sizeRange[0]} MB</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <label className="text-sm text-gray-600 min-w-[60px]">最大值:</label>
+              <Slider
+                min={0}
+                max={100}
+                value={filters.sizeRange[1]}
+                onChange={(value) => setFilters(prev => ({ 
+                  ...prev, 
+                  sizeRange: [prev.sizeRange[0], value as number] 
+                }))}
+                className="flex-1"
+              />
+              <span className="text-xs text-gray-500 min-w-[40px]">{filters.sizeRange[1]} MB</span>
+            </div>
           </div>
         </div>
       </div>
@@ -164,7 +182,7 @@ export const DrawingSearch: React.FC<DrawingSearchProps> = ({
             开始日期
           </label>
           <DatePicker
-            value={filters.dateRange[0]}
+            value={filters.dateRange[0] || undefined}
             onChange={(date) => setFilters(prev => ({ 
               ...prev, 
               dateRange: [date, prev.dateRange[1]] 
@@ -177,7 +195,7 @@ export const DrawingSearch: React.FC<DrawingSearchProps> = ({
             结束日期
           </label>
           <DatePicker
-            value={filters.dateRange[1]}
+            value={filters.dateRange[1] || undefined}
             onChange={(date) => setFilters(prev => ({ 
               ...prev, 
               dateRange: [prev.dateRange[0], date] 
@@ -235,7 +253,7 @@ export const DrawingSearch: React.FC<DrawingSearchProps> = ({
           <Input
             placeholder="输入标签名称..."
             value={tagInput}
-            onChange={setTagInput}
+            onChange={(e) => setTagInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();

@@ -52,7 +52,7 @@ export const DrawingCard: React.FC<DrawingCardProps> = ({
       case '可用':
         return 'success';
       case '已废弃':
-        return 'error';
+        return 'danger';
       case '已归档':
         return 'secondary';
       default:
@@ -66,6 +66,7 @@ export const DrawingCard: React.FC<DrawingCardProps> = ({
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
       layout
+      onClick={() => onSelect?.(!selected)}
     >
       <Card
         padding="md"
@@ -74,7 +75,6 @@ export const DrawingCard: React.FC<DrawingCardProps> = ({
             ? 'ring-2 ring-ios18-blue bg-blue-50' 
             : 'hover:shadow-lg hover:shadow-gray-200/50'
         }`}
-        onClick={() => onSelect?.(!selected)}
       >
         {/* 选择框 */}
         {selected && (
@@ -169,10 +169,7 @@ export const DrawingCard: React.FC<DrawingCardProps> = ({
           <Button
             variant="secondary"
             size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              onPreview?.();
-            }}
+            onClick={() => onPreview?.()}
             className="bg-white/90 hover:bg-white"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -184,10 +181,7 @@ export const DrawingCard: React.FC<DrawingCardProps> = ({
           <Button
             variant="secondary"
             size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpen?.();
-            }}
+            onClick={() => onOpen?.()}
             className="bg-white/90 hover:bg-white"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -198,10 +192,7 @@ export const DrawingCard: React.FC<DrawingCardProps> = ({
           <Button
             variant="secondary"
             size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit?.();
-            }}
+            onClick={() => onEdit?.()}
             className="bg-white/90 hover:bg-white"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -212,10 +203,7 @@ export const DrawingCard: React.FC<DrawingCardProps> = ({
           <Button
             variant="secondary"
             size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete?.();
-            }}
+            onClick={() => onDelete?.()}
             className="bg-white/90 hover:bg-white text-red-600 hover:text-red-700"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

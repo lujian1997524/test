@@ -100,10 +100,10 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   return (
     <div className={`min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 ${className}`}>
       <div className="flex min-h-screen">
-        {/* 侧边栏 - 响应式优化 */}
+        {/* 侧边栏 - 固定不滚动 */}
         {showSidebar && sidebarItems.length > 0 && (
           <motion.div
-            className="flex-shrink-0 w-40 lg:w-44 xl:w-48 p-2 lg:p-4 hidden md:block"
+            className="flex-shrink-0 w-40 lg:w-44 xl:w-48 p-2 lg:p-4 hidden md:block fixed left-0 top-0 h-screen z-30 bg-white/80 backdrop-blur-xl border-r border-gray-200"
             initial={{ x: -20, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             transition={{ duration: 0.3 }}
@@ -112,14 +112,16 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
               items={sidebarItems}
               collapsed={sidebarCollapsed}
               onToggleCollapse={toggleSidebar}
-              className="h-full sticky top-2 lg:top-4"
+              className="h-full pt-4"
             />
           </motion.div>
         )}
 
-        {/* 主内容区域 - 响应式优化 */}
+        {/* 主内容区域 - 为固定侧边栏留出空间 */}
         <motion.div
-          className="flex-1 flex flex-col min-h-screen overflow-hidden"
+          className={`flex-1 flex flex-col min-h-screen overflow-hidden ${
+            showSidebar && sidebarItems.length > 0 ? 'md:ml-40 lg:ml-44 xl:ml-48' : ''
+          }`}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.1 }}

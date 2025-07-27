@@ -28,15 +28,38 @@ router.get('/', authenticate, async (req, res) => {
 
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
+    // 使用包含关联查询来计算活跃项目数量
     const { count, rows: workers } = await Worker.findAndCountAll({
       where: whereClause,
+      include: [
+        {
+          association: 'assignedProjects',
+          attributes: ['id', 'status'],
+          where: {
+            // 只计算活跃项目（非过往项目）
+            status: { [Op.in]: ['pending', 'in_progress', 'completed'] },
+            isPastProject: { [Op.or]: [false, null] } // 不是过往项目
+          },
+          required: false // LEFT JOIN，即使没有项目也要显示工人
+        }
+      ],
       order: [['createdAt', 'DESC']],
       limit: parseInt(limit),
-      offset
+      offset,
+      distinct: true // 避免由于 JOIN 导致的重复计数
+    });
+
+    // 为每个工人添加项目数量统计
+    const workersWithProjectCount = workers.map(worker => {
+      const workerData = worker.toJSON();
+      workerData.projectCount = worker.assignedProjects ? worker.assignedProjects.length : 0;
+      // 不需要在响应中返回详细的项目信息，只返回数量
+      delete workerData.assignedProjects;
+      return workerData;
     });
 
     res.json({
-      workers,
+      workers: workersWithProjectCount,
       pagination: {
         total: count,
         page: parseInt(page),

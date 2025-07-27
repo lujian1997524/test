@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
+import LoginModal from '@/components/auth/LoginModal';
 import { ProjectTree } from '@/components/materials/ProjectTree';
 import { PastProjectsTree } from '@/components/projects/PastProjectsTree';
 import { MaterialsTable } from '@/components/materials/MaterialsTable';
@@ -18,18 +18,28 @@ import { SyncStatusIndicator } from '@/components/common/SyncManager';
 import { NotificationContainer } from '@/components/ui/NotificationContainer';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { Card, Button, Dropdown, Input, Badge, Avatar, Loading, Alert, SearchBar, EmptyData } from '@/components/ui';
+import { SearchBox } from '@/components/ui/SearchBox';
+import type { SearchType, SearchResult } from '@/components/ui/SearchBox';
 
 export default function Home() {
+  const { isAuthenticated } = useAuth();
+
   return (
-    <ProtectedRoute>
-      <HomeContent />
-    </ProtectedRoute>
+    <>
+      {/* 登录模态框 - 未登录时显示，强制模态 */}
+      <LoginModal isOpen={!isAuthenticated} />
+      
+      {/* 主页面内容 - 始终渲染，未登录时显示模糊效果 */}
+      <div className={!isAuthenticated ? 'filter blur-sm pointer-events-none' : ''}>
+        <HomeContent />
+      </div>
+    </>
   );
 }
 
 function HomeContent() {
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
-  const [viewType, setViewType] = useState<'active' | 'completed' | 'drawings'>('active');
+  const [viewType, setViewType] = useState<'active' | 'completed' | 'drawings' | 'dashboard'>('active');
   const [workerNameFilter, setWorkerNameFilter] = useState('');
   const [workers, setWorkers] = useState<any[]>([]);
   const [thicknessFilter, setThicknessFilter] = useState('');
@@ -40,8 +50,55 @@ function HomeContent() {
   const [showWorkerManagement, setShowWorkerManagement] = useState(false);
   const [editingProject, setEditingProject] = useState<any>(null);
   const [drawingCategory, setDrawingCategory] = useState('all'); // 图纸分类筛选
+  const [drawingStats, setDrawingStats] = useState<{[key: string]: number}>({});
+  
+  // 分离手动刷新和自动刷新的加载状态
+  const [manualRefreshLoading, setManualRefreshLoading] = useState(false);
+  
+  // 全局搜索状态
+  const [searchType, setSearchType] = useState<SearchType>('all');
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchClearTrigger, setSearchClearTrigger] = useState(0);
+  
+  // 认证信息
   const { token, isAuthenticated, user, logout } = useAuth();
   const { connectSSE, disconnectSSE } = useNotificationStore();
+  
+  // 获取图纸统计信息
+  const fetchDrawingStats = async () => {
+    if (!token) return;
+    
+    try {
+      const response = await fetch('/api/drawings?limit=1000', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const drawings = data.drawings || [];
+        
+        // 统计各分类数量
+        const stats: {[key: string]: number} = {
+          'all': drawings.length,
+          'project-drawings': drawings.filter((d: any) => !d.isCommonPart && d.projectIds?.length > 0).length,
+          'common-parts': drawings.filter((d: any) => d.isCommonPart).length,
+          'dxf': drawings.filter((d: any) => d.fileType === 'DXF').length,
+          'available': drawings.filter((d: any) => d.status === '可用').length,
+          'deprecated': drawings.filter((d: any) => d.status === '已废弃').length,
+          'archived': drawings.filter((d: any) => d.status === '已归档').length,
+          'associated': drawings.filter((d: any) => !d.isCommonPart && d.projectIds?.length > 0).length,
+          'unassociated': drawings.filter((d: any) => !d.isCommonPart && (!d.projectIds || d.projectIds.length === 0)).length
+        };
+        
+        setDrawingStats(stats);
+      }
+    } catch (error) {
+      console.error('获取图纸统计失败:', error);
+    }
+  };
   
   // Zustand状态管理
   const { 
@@ -79,20 +136,29 @@ function HomeContent() {
       // 如果有传入工人姓名，设置筛选条件
       if (event.detail?.workerName) {
         setWorkerNameFilter(event.detail.workerName);
-        // 切换到已完成项目视图并筛选
-        handleProjectSelect(null, 'completed');
+        // 切换到活跃项目视图并筛选（而不是过往项目）
+        const targetViewType = event.detail?.viewType || 'active';
+        handleProjectSelect(null, targetViewType);
       }
+    };
+
+    // 监听图纸更新事件
+    const handleDrawingUpdated = () => {
+      // 刷新图纸统计信息
+      fetchDrawingStats();
     };
 
     // 监听材料更新和SSE项目删除事件
     window.addEventListener('material-updated', handleMaterialUpdated);
     window.addEventListener('project-deleted-sse', handleProjectDeletedSSE as EventListener);
     window.addEventListener('close-worker-management', handleCloseWorkerManagement as EventListener);
+    window.addEventListener('drawing-updated', handleDrawingUpdated);
 
     return () => {
       window.removeEventListener('material-updated', handleMaterialUpdated);
       window.removeEventListener('project-deleted-sse', handleProjectDeletedSSE as EventListener);
       window.removeEventListener('close-worker-management', handleCloseWorkerManagement as EventListener);
+      window.removeEventListener('drawing-updated', handleDrawingUpdated);
     };
   }, [selectedProjectId, fetchMaterials]);
 
@@ -105,6 +171,8 @@ function HomeContent() {
     fetchWorkers();
     // 获取厚度规格数据用于筛选
     fetchThicknessSpecs();
+    // 获取图纸统计信息
+    fetchDrawingStats();
     // SSE监听器将在连接成功后设置，不在这里重复设置
   }, []); // 使用空依赖数组，只在挂载时执行一次
 
@@ -165,22 +233,58 @@ function HomeContent() {
     }
   };
 
-  // 处理项目选择
-  const handleProjectSelect = (projectId: number | null, type: 'active' | 'completed' | 'drawings') => {
+  // 处理项目选择 - 添加平滑过渡
+  const handleProjectSelect = (projectId: number | null, type: 'active' | 'completed' | 'drawings' | 'dashboard') => {
     console.log('🔄 切换视图类型:', type, '项目ID:', projectId);
+    
+    // 清空搜索状态
+    setSearchResults([]);
+    setSearchType('all');
+    setSearchClearTrigger(prev => prev + 1);
+    
+    // 如果是跳转到仪表盘，直接跳转到仪表盘页面
+    if (type === 'dashboard') {
+      window.location.href = '/dashboard';
+      return;
+    }
+    
+    // 如果切换的是不同的视图类型，添加过渡延迟
+    const isViewTypeChange = viewType !== type;
+    
     // 当选择项目时，自动关闭工人管理界面
     setShowWorkerManagement(false);
-    setViewType(type);
-    setSelectedProjectId(projectId);
     
+    // 如果是视图类型切换，先清空选中的项目避免状态冲突
+    if (isViewTypeChange) {
+      setSelectedProjectId(null);
+    }
+    
+    // 使用 setTimeout 来创建平滑过渡效果
+    if (isViewTypeChange) {
+      // 延迟设置新的视图类型，让动画有时间完成
+      setTimeout(() => {
+        setViewType(type);
+        if (projectId !== null) {
+          setSelectedProjectId(projectId);
+        }
+      }, 150);
+    } else {
+      setViewType(type);
+      setSelectedProjectId(projectId);
+    }
+    
+    // 根据视图类型获取数据 - 使用静默刷新
     if (type === 'completed') {
       console.log('✅ 获取过往项目数据...');
-      // 使用过往项目API
-      const { fetchPastProjects } = useProjectStore.getState();
-      fetchPastProjects();
+      // 延迟获取数据，确保视图切换完成
+      setTimeout(() => {
+        silentRefresh('completed');
+      }, isViewTypeChange ? 200 : 0);
     } else if (type === 'active') {
       console.log('📋 获取活跃项目数据...');
-      fetchProjects(); // 获取活跃项目
+      setTimeout(() => {
+        silentRefresh('active');
+      }, isViewTypeChange ? 200 : 0);
     } else if (type === 'drawings') {
       console.log('📂 切换到图纸库视图...');
       // 图纸库不需要额外数据获取，由 DrawingLibrary 组件自己处理
@@ -190,6 +294,10 @@ function HomeContent() {
   // 处理单独选择项目（不改变视图类型，但关闭工人管理）
   const handleSelectProject = (projectId: number | null) => {
     setShowWorkerManagement(false);
+    // 清空搜索状态
+    setSearchResults([]);
+    setSearchType('all');
+    setSearchClearTrigger(prev => prev + 1);
     setSelectedProjectId(projectId);
   };
 
@@ -241,18 +349,43 @@ function HomeContent() {
 
 
 
-  // 刷新数据
-  const handleRefresh = () => {
-    // 根据当前视图类型刷新相应数据
-    if (viewType === 'completed') {
-      const { fetchPastProjects } = useProjectStore.getState();
-      fetchPastProjects();
-    } else {
-      fetchProjects();
+  // 组件内部使用的静默刷新回调
+  const handleSilentRefreshActive = () => silentRefresh('active');
+  const handleSilentRefreshCompleted = () => silentRefresh('completed');
+  const silentRefresh = async (type: 'active' | 'completed' | 'drawings') => {
+    try {
+      if (type === 'completed') {
+        const { fetchPastProjects } = useProjectStore.getState();
+        await fetchPastProjects();
+      } else if (type === 'active') {
+        await fetchProjects();
+      }
+      // drawings 类型不需要额外数据获取
+    } catch (error) {
+      console.error('静默刷新失败:', error);
     }
+  };
+
+  // 刷新数据 - 手动刷新，显示加载状态
+  const handleRefresh = async () => {
+    setManualRefreshLoading(true);
     
-    if (selectedProjectId) {
-      fetchMaterials(selectedProjectId);
+    try {
+      // 根据当前视图类型刷新相应数据
+      if (viewType === 'completed') {
+        const { fetchPastProjects } = useProjectStore.getState();
+        await fetchPastProjects();
+      } else {
+        await fetchProjects();
+      }
+      
+      if (selectedProjectId) {
+        await fetchMaterials(selectedProjectId);
+      }
+    } catch (error) {
+      console.error('手动刷新失败:', error);
+    } finally {
+      setManualRefreshLoading(false);
     }
   };
 
@@ -266,6 +399,77 @@ function HomeContent() {
   const openEditModal = (project: any) => {
     setEditingProject(project);
     setShowProjectModal(true);
+  };
+
+  // 全局搜索处理函数
+  const handleGlobalSearch = async (query: string, type: SearchType) => {
+    if (!token || query.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    setSearchLoading(true);
+    
+    try {
+      const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&type=${type}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSearchResults(data.results || []);
+      } else {
+        console.error('搜索失败:', response.statusText);
+        setSearchResults([]);
+      }
+    } catch (error) {
+      console.error('搜索请求失败:', error);
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  // 处理搜索结果选择
+  const handleSearchResultSelect = (result: SearchResult) => {
+    console.log('选择搜索结果:', result);
+    
+    // 根据搜索结果类型进行相应操作
+    switch(result.type) {
+      case 'projects':
+        // 跳转到项目详情
+        const projectId = parseInt(result.id);
+        setSelectedProjectId(projectId);
+        setViewType('active');
+        break;
+      case 'workers':
+        // 打开工人管理并筛选
+        setWorkerNameFilter(result.title);
+        setShowWorkerManagement(true);
+        break;
+      case 'drawings':
+        // 跳转到图纸库
+        setViewType('drawings');
+        break;
+      case 'materials':
+        // 可以根据材料信息进行筛选
+        setThicknessFilter(result.title.match(/\d+/)?.[0] || '');
+        setViewType('active');
+        break;
+      case 'time':
+        // 时间相关搜索可以按日期筛选项目
+        setViewType('completed');
+        break;
+      default:
+        console.log('未知搜索结果类型:', result.type);
+    }
+    
+    // 清空搜索结果和搜索状态
+    setSearchResults([]);
+    setSearchType('all');
+    setSearchClearTrigger(prev => prev + 1);
   };
 
   return (
@@ -288,65 +492,91 @@ function HomeContent() {
             </div>
             
             <div className="flex items-center space-x-4">
-              {/* 用户信息 */}
-              <div className="flex items-center space-x-3">
-                <Avatar
-                  name={user?.name}
-                  size="sm"
-                  className="bg-ios18-blue text-white"
+              {/* 全局搜索框 - 增加宽度 */}
+              <div className="hidden lg:block w-96">
+                <SearchBox
+                  placeholder="搜索项目、工人、图纸、板材..."
+                  searchType={searchType}
+                  onSearchTypeChange={setSearchType}
+                  onSearch={handleGlobalSearch}
+                  onResultSelect={handleSearchResultSelect}
+                  results={searchResults}
+                  loading={searchLoading}
+                  clearTrigger={searchClearTrigger}
                 />
-                <div className="hidden md:block">
-                  <p className="font-medium text-text-primary text-sm">
-                    {user?.name}
-                  </p>
-                  <Badge
-                    variant={user?.role === 'admin' ? 'primary' : 'secondary'}
-                    size="sm"
-                  >
-                    {user?.role === 'admin' ? '管理员' : '操作员'}
-                  </Badge>
-                </div>
               </div>
 
-              {/* 功能按钮 */}
-              <div className="flex items-center space-x-2">
-                {/* 视图切换按钮组 */}
-                <div className="flex items-center bg-white border border-gray-200 rounded-lg overflow-hidden">
-                  <Button
-                    variant={viewType === 'active' ? 'primary' : 'ghost'}
-                    size="sm"
-                    onClick={() => handleProjectSelect(null, 'active')}
-                    className="flex items-center gap-2 rounded-none"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                    活跃项目
-                  </Button>
-                  <Button
-                    variant={viewType === 'completed' ? 'primary' : 'ghost'} 
-                    size="sm"
-                    onClick={() => handleProjectSelect(null, 'completed')}
-                    className="flex items-center gap-2 rounded-none"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                    </svg>
-                    过往项目
-                  </Button>
-                  <Button
-                    variant={viewType === 'drawings' ? 'primary' : 'ghost'} 
-                    size="sm"
-                    onClick={() => handleProjectSelect(null, 'drawings')}
-                    className="flex items-center gap-2 rounded-none"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                    </svg>
-                    图纸库
-                  </Button>
-                </div>
+              {/* 移动端搜索按钮 */}
+              <div className="lg:hidden">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    // 可以打开一个移动端搜索模态框或跳转到搜索页面
+                    alert('移动端搜索功能开发中...');
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  搜索
+                </Button>
+              </div>
 
+              {/* 功能按钮区域 */}
+              <div className="flex items-center space-x-2">
+                {/* 视图切换按钮组 - 添加过渡动画 */}
+                <div className="flex items-center bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                  <motion.div
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <Button
+                      variant={viewType === 'active' ? 'primary' : 'ghost'}
+                      size="sm"
+                      onClick={() => handleProjectSelect(null, 'active')}
+                      className="flex items-center gap-2 rounded-none transition-all duration-200"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                      活跃项目
+                    </Button>
+                  </motion.div>
+                  <motion.div
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <Button
+                      variant={viewType === 'completed' ? 'primary' : 'ghost'} 
+                      size="sm"
+                      onClick={() => handleProjectSelect(null, 'completed')}
+                      className="flex items-center gap-2 rounded-none transition-all duration-200"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                      </svg>
+                      过往项目
+                    </Button>
+                  </motion.div>
+                  <motion.div
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <Button
+                      variant={viewType === 'drawings' ? 'primary' : 'ghost'} 
+                      size="sm"
+                      onClick={() => handleProjectSelect(null, 'drawings')}
+                      className="flex items-center gap-2 rounded-none transition-all duration-200"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                      </svg>
+                      图纸库
+                    </Button>
+                  </motion.div>
+                </div>
 
                 <Button
                   variant="secondary"
@@ -373,21 +603,15 @@ function HomeContent() {
                 </Button>
 
                 <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => window.location.href = '/search'}
-                  className="flex items-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                  搜索
-                </Button>
-
-                <Button
                   variant={showWorkerManagement ? 'primary' : 'secondary'}
                   size="sm"
-                  onClick={() => setShowWorkerManagement(!showWorkerManagement)}
+                  onClick={() => {
+                    // 清空搜索状态
+                    setSearchResults([]);
+                    setSearchType('all');
+                    setSearchClearTrigger(prev => prev + 1);
+                    setShowWorkerManagement(!showWorkerManagement);
+                  }}
                   className="flex items-center gap-2"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -400,8 +624,8 @@ function HomeContent() {
                   variant="primary"
                   size="sm"
                   onClick={handleRefresh}
-                  disabled={projectLoading}
-                  loading={projectLoading}
+                  disabled={manualRefreshLoading}
+                  loading={manualRefreshLoading}
                   className="shadow-lg"
                 >
                   刷新
@@ -415,6 +639,27 @@ function HomeContent() {
                   退出
                 </Button>
               </div>
+
+              {/* 用户信息 - 移到最右边 */}
+              <div className="flex items-center space-x-3">
+                <Avatar
+                  name={user?.name}
+                  size="sm"
+                  className="bg-ios18-blue text-white"
+                />
+                <div className="hidden md:block">
+                  <p className="font-medium text-text-primary text-sm">
+                    {user?.name}
+                  </p>
+                  <Badge
+                    variant={user?.role === 'admin' ? 'primary' : 'secondary'}
+                    size="sm"
+                  >
+                    {user?.role === 'admin' ? '管理员' : '操作员'}
+                  </Badge>
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
@@ -437,252 +682,251 @@ function HomeContent() {
               onCreateProject={openCreateModal}
               onEditProject={openEditModal}
               onDeleteProject={handleDeleteProject}
-              onRefresh={handleRefresh}
+              onRefresh={handleSilentRefreshActive}
               className="h-full"
             />
           ) : viewType === 'completed' ? (
             <PastProjectsTree
               selectedProjectId={selectedProjectId}
               onProjectSelect={handleSelectProject}
-              onRefresh={handleRefresh}
+              onRefresh={handleSilentRefreshCompleted}
               className="h-full"
             />
           ) : (
-            // 图纸库分类树
-            <Card padding="none" className="h-full overflow-hidden">
-              <div className="p-4 bg-gray-50 border-b border-gray-200">
-                <h3 className="font-semibold text-gray-900">图纸库分类</h3>
-              </div>
-              <div className="p-4 space-y-2 overflow-auto flex-1">
-                {[
-                  { key: 'all', label: '全部图纸' },
-                  { key: 'project-drawings', label: '项目图纸' },
-                  { key: 'common-parts', label: '常用零件' },
-                  { key: 'dxf', label: 'DXF文件' },
-                  { key: 'associated', label: '已关联' },
-                  { key: 'unassociated', label: '未关联' },
-                  { key: 'available', label: '可用' },
-                  { key: 'deprecated', label: '已废弃' },
-                  { key: 'archived', label: '已归档' }
-                ].map((category) => (
-                  <Button
-                    key={category.key}
-                    variant={drawingCategory === category.key ? 'primary' : 'ghost'}
-                    size="sm"
-                    onClick={() => setDrawingCategory(category.key)}
-                    className="w-full justify-start"
-                  >
-                    {category.label}
-                  </Button>
-                ))}
-              </div>
-            </Card>
-          )}
-        </motion.div>
-
-        {/* 右侧表格区域 */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
-          className="flex-1 p-3 lg:p-6 overflow-hidden min-w-0 flex flex-col"
-        >
-          {/* 活跃项目筛选器 */}
-          {viewType === 'active' && !showWorkerManagement && !selectedProjectId && (
+            // 图纸库分类侧边栏 - 与项目树保持一致的风格
             <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="mb-4"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.3 }}
+              className="h-full bg-white/80 backdrop-blur-xl rounded-2xl border border-gray-200 shadow-lg overflow-hidden"
             >
-              <Card padding="md" className="bg-white/80 backdrop-blur-xl">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="text-lg font-semibold text-text-primary">项目筛选</h3>
-                    <p className="text-sm text-text-secondary">按条件筛选活跃项目</p>
-                  </div>
+              {/* 标题栏 */}
+              <div className="p-4 bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-gray-900 flex items-center">
+                    <svg className="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                    图纸分类
+                  </h3>
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={clearFilters}
-                    className="flex items-center gap-2"
+                    onClick={() => setDrawingCategory('all')}
+                    className="text-xs text-gray-500 hover:text-gray-700"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                    清空筛选
+                    清除筛选
                   </Button>
                 </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {/* 工人筛选 */}
-                  <div>
-                    <label className="block text-sm font-medium text-text-primary mb-2">
-                      负责工人
-                    </label>
-                    <Dropdown
-                      options={[
-                        { label: '全部工人', value: '' },
-                        ...workers.map(worker => ({
-                          label: worker.name,
-                          value: worker.name
-                        }))
-                      ]}
-                      value={workerNameFilter}
-                      onChange={setWorkerNameFilter}
-                      placeholder="选择工人"
-                      className="w-full"
-                    />
-                  </div>
+              </div>
 
-                  {/* 板材厚度筛选 */}
-                  <div>
-                    <label className="block text-sm font-medium text-text-primary mb-2">
-                      板材厚度
-                    </label>
-                    <Dropdown
-                      options={[
-                        { label: '全部厚度', value: '' },
-                        ...thicknessSpecs
-                          .filter(spec => spec.isActive)
-                          .sort((a, b) => a.sortOrder - b.sortOrder)
-                          .map(spec => ({
-                            label: `${spec.thickness}${spec.unit} (${spec.materialType})`,
-                            value: spec.thickness
-                          }))
-                      ]}
-                      value={thicknessFilter}
-                      onChange={setThicknessFilter}
-                      placeholder="选择厚度"
-                      className="w-full"
-                    />
-                  </div>
-
-                  {/* 项目状态筛选 */}
-                  <div>
-                    <label className="block text-sm font-medium text-text-primary mb-2">
-                      项目状态
-                    </label>
-                    <Dropdown
-                      options={[
-                        { label: '全部状态', value: '' },
-                        { label: '待处理', value: 'pending' },
-                        { label: '进行中', value: 'in_progress' },
-                        { label: '已完成', value: 'completed' }
-                      ]}
-                      value=""
-                      onChange={() => {}}
-                      placeholder="选择状态"
-                      className="w-full"
-                    />
-                  </div>
-                </div>
-                
-                {/* 筛选状态提示 */}
-                {(workerNameFilter || thicknessFilter) && (
-                  <Alert
-                    variant="info"
-                    className="mt-4"
-                  >
-                    <div className="flex items-center gap-2 text-sm">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                      </svg>
-                      <span className="font-medium">当前筛选条件:</span>
+              {/* 分类列表 */}
+              <div className="p-3 h-full overflow-auto">
+                <div className="space-y-1">
+                  {/* 主要分类 */}
+                  <div className="mb-4">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2 px-2">
+                      📂 主要分类
                     </div>
-                    <div className="mt-2 space-y-1 text-sm">
-                      {workerNameFilter && <div>• 工人: {workerNameFilter}</div>}
-                      {thicknessFilter && <div>• 板材厚度: {thicknessFilter}mm</div>}
-                    </div>
-                  </Alert>
-                )}
-              </Card>
-            </motion.div>
-          )}
-
-          {/* 过往项目筛选器 */}
-          {viewType === 'completed' && (
-            <Card padding="md" className="mb-4 bg-white/80 backdrop-blur-xl">
-              <div className="flex items-center gap-4">
-                <div className="flex-1">
-                  <label htmlFor="workerFilter" className="block text-sm font-medium text-gray-700 mb-2">
-                    按工人姓名筛选
-                  </label>
-                  <div className="flex gap-2">
-                    <SearchBar
-                      placeholder="输入工人姓名..."
-                      value={workerNameFilter}
-                      onChange={setWorkerNameFilter}
-                      onSearch={() => handleProjectSelect(null, 'completed')}
-                      className="flex-1"
-                    />
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => handleProjectSelect(null, 'completed')}
-                      className="flex items-center gap-2"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                      搜索
-                    </Button>
-                    {workerNameFilter && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => {
-                          setWorkerNameFilter('');
-                          handleProjectSelect(null, 'completed');
-                        }}
-                        className="flex items-center gap-2"
+                    {[
+                      { key: 'all', label: '全部图纸', icon: '📋', count: drawingStats['all'] || 0 },
+                      { key: 'project-drawings', label: '项目图纸', icon: '🏗️', count: drawingStats['project-drawings'] || 0 },
+                      { key: 'common-parts', label: '常用零件', icon: '⚙️', count: drawingStats['common-parts'] || 0 },
+                      { key: 'dxf', label: 'DXF文件', icon: '📐', count: drawingStats['dxf'] || 0 }
+                    ].map((category) => (
+                      <motion.div
+                        key={category.key}
+                        whileHover={{ scale: 1.02, x: 4 }}
+                        whileTap={{ scale: 0.98 }}
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                        清除
-                      </Button>
-                    )}
+                        <Button
+                          variant={drawingCategory === category.key ? 'primary' : 'ghost'}
+                          size="sm"
+                          onClick={() => setDrawingCategory(category.key)}
+                          className={`w-full justify-start text-left transition-all duration-200 ${
+                            drawingCategory === category.key
+                              ? 'bg-ios18-blue text-white shadow-md'
+                              : 'hover:bg-gray-50 text-gray-700'
+                          }`}
+                        >
+                          <span className="mr-2">{category.icon}</span>
+                          <span className="flex-1">{category.label}</span>
+                          {category.count > 0 && (
+                            <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                              drawingCategory === category.key
+                                ? 'bg-white/20 text-white'
+                                : 'bg-gray-200 text-gray-600'
+                            }`}>
+                              {category.count}
+                            </span>
+                          )}
+                        </Button>
+                      </motion.div>
+                    ))}
                   </div>
-                  {workerNameFilter && (
-                    <Alert
-                      variant="info"
-                      size="sm"
-                      className="mt-2"
-                    >
-                      当前筛选: 工人姓名包含 "{workerNameFilter}"
-                    </Alert>
-                  )}
+
+                  {/* 状态分类 */}
+                  <div className="mb-4">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2 px-2">
+                      📊 状态分类
+                    </div>
+                    {[
+                      { key: 'available', label: '可用', icon: '✅', color: 'text-green-600', count: drawingStats['available'] || 0 },
+                      { key: 'deprecated', label: '已废弃', icon: '⚠️', color: 'text-yellow-600', count: drawingStats['deprecated'] || 0 },
+                      { key: 'archived', label: '已归档', icon: '📦', color: 'text-gray-600', count: drawingStats['archived'] || 0 }
+                    ].map((category) => (
+                      <motion.div
+                        key={category.key}
+                        whileHover={{ scale: 1.02, x: 4 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <Button
+                          variant={drawingCategory === category.key ? 'primary' : 'ghost'}
+                          size="sm"
+                          onClick={() => setDrawingCategory(category.key)}
+                          className={`w-full justify-start text-left transition-all duration-200 ${
+                            drawingCategory === category.key
+                              ? 'bg-ios18-blue text-white shadow-md'
+                              : 'hover:bg-gray-50 text-gray-700'
+                          }`}
+                        >
+                          <span className={`mr-2 ${category.color}`}>{category.icon}</span>
+                          <span className="flex-1">{category.label}</span>
+                          {category.count > 0 && (
+                            <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                              drawingCategory === category.key
+                                ? 'bg-white/20 text-white'
+                                : 'bg-gray-200 text-gray-600'
+                            }`}>
+                              {category.count}
+                            </span>
+                          )}
+                        </Button>
+                      </motion.div>
+                    ))}
+                  </div>
+
+                  {/* 关联分类 */}
+                  <div className="mb-4">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2 px-2">
+                      🔗 关联状态
+                    </div>
+                    {[
+                      { key: 'associated', label: '已关联项目', icon: '🔗', color: 'text-blue-600', count: drawingStats['associated'] || 0 },
+                      { key: 'unassociated', label: '未关联项目', icon: '🔓', color: 'text-gray-600', count: drawingStats['unassociated'] || 0 }
+                    ].map((category) => (
+                      <motion.div
+                        key={category.key}
+                        whileHover={{ scale: 1.02, x: 4 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <Button
+                          variant={drawingCategory === category.key ? 'primary' : 'ghost'}
+                          size="sm"
+                          onClick={() => setDrawingCategory(category.key)}
+                          className={`w-full justify-start text-left transition-all duration-200 ${
+                            drawingCategory === category.key
+                              ? 'bg-ios18-blue text-white shadow-md'
+                              : 'hover:bg-gray-50 text-gray-700'
+                          }`}
+                        >
+                          <span className={`mr-2 ${category.color}`}>{category.icon}</span>
+                          <span className="flex-1">{category.label}</span>
+                          {category.count > 0 && (
+                            <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                              drawingCategory === category.key
+                                ? 'bg-white/20 text-white'
+                                : 'bg-gray-200 text-gray-600'
+                            }`}>
+                              {category.count}
+                            </span>
+                          )}
+                        </Button>
+                      </motion.div>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </Card>
+            </motion.div>
           )}
+        </motion.div>
 
-          {/* 条件渲染：工人管理、项目详情页、图纸库 或 项目列表表格 */}
-          {showWorkerManagement ? (
-            <WorkerManagement className="flex-1" />
-          ) : selectedProjectId && viewType === 'active' ? (
-            <ProjectDetail
-              projectId={selectedProjectId}
-              onBack={() => handleSelectProject(null)}
-              className="flex-1"
-            />
-          ) : viewType === 'drawings' ? (
-            <DrawingLibrary
-              selectedCategory={drawingCategory}
-              onCategoryChange={setDrawingCategory}
-              className="flex-1"
-            />
-          ) : (
-            <MaterialsTable
-              selectedProjectId={selectedProjectId}
-              onProjectSelect={handleSelectProject}
-              viewType={viewType as 'active' | 'completed'}  // 类型转换，因为此时 viewType 不会是 'drawings'
-              workerNameFilter={workerNameFilter}
-              thicknessFilter={thicknessFilter}
-              className="flex-1"
-            />
-          )}
+        {/* 右侧表格区域 - 添加更平滑的过渡动画 */}
+        <motion.div
+          key={`${viewType}-${showWorkerManagement}-${selectedProjectId}`} // 添加key确保重新渲染
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          transition={{ 
+            duration: 0.4, 
+            delay: 0.1,
+            ease: "easeInOut"
+          }}
+          className="flex-1 p-3 lg:p-6 overflow-hidden min-w-0 flex flex-col"
+        >
+          {/* 条件渲染：工人管理、项目详情页、图纸库 或 项目列表表格 - 使用AnimatePresence */}
+          <AnimatePresence mode="wait">
+            {showWorkerManagement ? (
+              <motion.div
+                key="worker-management"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3, ease: "easeInOut" }}
+                className="flex-1"
+              >
+                <WorkerManagement className="h-full" />
+              </motion.div>
+            ) : selectedProjectId && (viewType === 'active' || viewType === 'completed') ? (
+              <motion.div
+                key={`project-detail-${selectedProjectId}`}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3, ease: "easeInOut" }}
+                className="flex-1"
+              >
+                <ProjectDetail
+                  projectId={selectedProjectId}
+                  onBack={() => handleSelectProject(null)}
+                  className="h-full max-h-full"
+                />
+              </motion.div>
+            ) : viewType === 'drawings' ? (
+              <motion.div
+                key="drawing-library"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3, ease: "easeInOut" }}
+                className="flex-1"
+              >
+                <DrawingLibrary
+                  className="h-full"
+                  selectedCategory={drawingCategory}
+                  onCategoryChange={setDrawingCategory}
+                />
+              </motion.div>
+            ) : (
+              <motion.div
+                key={`materials-table-${viewType}`}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3, ease: "easeInOut" }}
+                className="flex-1"
+              >
+                <MaterialsTable
+                  selectedProjectId={selectedProjectId}
+                  onProjectSelect={handleSelectProject}
+                  viewType={viewType as 'active' | 'completed'}  // 类型转换，因为此时 viewType 不会是 'drawings'
+                  workerNameFilter={workerNameFilter}
+                  thicknessFilter={thicknessFilter}
+                  className="h-full"
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
       </div>
 
@@ -694,7 +938,6 @@ function HomeContent() {
               variant="ghost"
               size="sm"
               onClick={() => window.location.href = '/workers'}
-              title="工人管理"
               className="p-2 rounded-lg"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -705,7 +948,6 @@ function HomeContent() {
               variant="ghost"
               size="sm"
               onClick={() => window.location.href = '/drawings'}
-              title="图纸管理"
               className="p-2 rounded-lg"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -89,13 +89,8 @@ export const CADPreview: React.FC<CADPreviewProps> = ({
       // 创建查看器实例 - 使用简化的配置
       const viewer = new DxfViewer(containerRef.current, {
         autoResize: true,
-        colorCorrection: true,
-        // 启用文字显示并使用默认字体
-        canvasOptions: {
-          alpha: true,
-          antialias: true,
-          preserveDrawingBuffer: false
-        }
+        colorCorrection: true
+        // 移除不支持的canvasOptions
       });
 
       setViewerInstance(viewer);
@@ -180,50 +175,9 @@ export const CADPreview: React.FC<CADPreviewProps> = ({
     };
   };
 
-  // 工具栏组件
+  // 工具栏组件已移除
   const renderToolbar = () => {
-    if (!showToolbar || !enableInteraction || !viewerInstance) return null;
-    
-    return (
-      <div className="absolute top-2 left-2 flex space-x-1 bg-white/90 backdrop-blur-sm rounded-lg shadow-sm p-1 z-10">
-        <button
-          onClick={() => viewerInstance.Zoom(1.2)}
-          className="p-2 hover:bg-gray-100 rounded transition-colors" 
-          title="放大"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-          </svg>
-        </button>
-        <button
-          onClick={() => viewerInstance.Zoom(0.8)}
-          className="p-2 hover:bg-gray-100 rounded transition-colors"
-          title="缩小"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
-          </svg>
-        </button>
-        <button
-          onClick={() => viewerInstance.ZoomToFit()}
-          className="p-2 hover:bg-gray-100 rounded transition-colors"
-          title="适合窗口"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-          </svg>
-        </button>
-        <button
-          onClick={() => viewerInstance.Reset()}
-          className="p-2 hover:bg-gray-100 rounded transition-colors"
-          title="重置视图"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-        </button>
-      </div>
-    );
+    return null;
   };
 
   if (loading) {

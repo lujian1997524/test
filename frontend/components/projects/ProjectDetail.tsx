@@ -395,10 +395,19 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
   // 获取优先级颜色
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'high': return 'text-red-600 bg-red-100';
-      case 'medium': return 'text-yellow-600 bg-yellow-100';
-      case 'low': return 'text-green-600 bg-green-100';
-      default: return 'text-gray-600 bg-gray-100';
+      case 'high': return 'text-red-700 bg-red-100';
+      case 'medium': return 'text-yellow-700 bg-yellow-100';
+      case 'low': return 'text-green-700 bg-green-100';
+      default: return 'text-gray-700 bg-gray-100';
+    }
+  };
+
+  const getPriorityColorBadge = (priority: string) => {
+    switch (priority) {
+      case 'high': return 'bg-red-500';
+      case 'medium': return 'bg-yellow-500';
+      case 'low': return 'bg-green-500';
+      default: return 'bg-gray-500';
     }
   };
 
@@ -440,9 +449,12 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
   }
 
   return (
-    <div className={`bg-white/80 backdrop-blur-xl rounded-2xl border border-gray-200 shadow-lg flex flex-col h-full ${className}`}>
+    <div 
+      className={`bg-white/80 backdrop-blur-xl rounded-2xl border border-gray-200 shadow-lg overflow-hidden flex flex-col ${className}`}
+      style={{ maxHeight: 'calc(100vh - 120px)' }} // 明确限制最大高度，为顶部标题栏和底部间距预留空间
+    >
       {/* 标题栏 */}
-      <div className="p-6 border-b border-gray-200">
+      <div className="p-6 border-b border-gray-200 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <button
@@ -478,12 +490,11 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
         </div>
       </div>
 
-      {/* 内容区域 - 单页面显示所有信息，添加滚动 */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
-        <div className="p-6 pb-8">
-          <div className="space-y-8">
-            {/* 基本信息部分 */}
-            <div className="bg-gray-50 rounded-lg p-6">
+      {/* 内容区域 - 确保正确处理父容器的padding约束 */}
+      <div className="flex-1 overflow-auto min-h-0">
+        <div className="space-y-8 p-6">
+          {/* 基本信息部分 */}
+          <div className="bg-gray-50 rounded-lg p-6">
             <h3 className="text-xl font-semibold mb-4 text-gray-900">基本信息</h3>
             <div className="grid grid-cols-3 gap-6">
               <div className="space-y-4">
@@ -568,7 +579,6 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">序号</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">项目名</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">工人</th>
                     {/* 厚度列 */}
                     {thicknessSpecs.map(spec => (
                       <th key={spec.id} className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -591,15 +601,12 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
                     {/* 项目名 */}
                     <td className="px-4 py-4">
                       <div className="font-medium text-gray-900">{project.name}</div>
-                      <div className="text-xs text-gray-500">
-                        {getStatusText(project.status)}
-                      </div>
-                    </td>
-                    
-                    {/* 工人 */}
-                    <td className="px-4 py-4">
-                      <div className="text-sm text-gray-900">
-                        {project.assignedWorker?.name || '未分配'}
+                      <div className="text-xs flex items-center space-x-1">
+                        <span className="text-gray-500">{getStatusText(project.status)}</span>
+                        <span className="text-gray-500">•</span>
+                        <span className={`w-3 h-3 rounded-full ${getPriorityColorBadge(project.priority)}`} title={`${getPriorityText(project.priority)}优先级`}></span>
+                        <span className="text-gray-500">•</span>
+                        <span className="text-gray-500">{project.assignedWorker?.name || '未分配'}</span>
                       </div>
                     </td>
                     
@@ -834,7 +841,6 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
                 )}
               </div>
             </div>
-          </div>
           </div>
         </div>
       </div>

@@ -66,7 +66,7 @@ router.get('/', authenticate, async (req, res) => {
           }]
         }
       ],
-      order: [['priority', 'DESC'], ['createdAt', 'DESC']],
+      order: [['sortOrder', 'ASC'], ['priority', 'DESC'], ['createdAt', 'DESC']],
       limit: parseInt(limit),
       offset
     });
@@ -883,6 +883,61 @@ router.get('/:id/history', authenticate, async (req, res) => {
     console.error('获取项目操作历史错误:', error);
     res.status(500).json({
       error: '获取项目操作历史失败',
+      message: error.message
+    });
+  }
+});
+
+// 更新项目排序
+router.put('/reorder', authenticate, requireOperator, async (req, res) => {
+  try {
+    const { projectIds } = req.body;
+    
+    if (!projectIds || !Array.isArray(projectIds)) {
+      return res.status(400).json({
+        error: '项目ID列表无效'
+      });
+    }
+
+    // 使用事务确保原子性
+    const { sequelize } = require('../utils/database');
+    await sequelize.transaction(async (transaction) => {
+      // 批量更新排序顺序
+      const updatePromises = projectIds.map((projectId, index) => 
+        Project.update(
+          { sortOrder: index + 1 },
+          { 
+            where: { id: projectId },
+            transaction
+          }
+        )
+      );
+
+      await Promise.all(updatePromises);
+    });
+
+    // 发送SSE事件通知其他用户
+    try {
+      sseManager.broadcast('projects-reordered', {
+        projectIds,
+        userName: req.user.name,
+        userId: req.user.id
+      }, req.user.id);
+      
+      console.log('SSE事件已发送: 项目排序更新');
+    } catch (sseError) {
+      console.error('发送SSE事件失败:', sseError);
+    }
+
+    res.json({
+      message: '项目排序更新成功',
+      projectIds
+    });
+
+  } catch (error) {
+    console.error('更新项目排序错误:', error);
+    res.status(500).json({
+      error: '更新项目排序失败',
       message: error.message
     });
   }

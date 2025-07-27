@@ -196,11 +196,11 @@ export const WorkerManagement: React.FC<WorkerManagementProps> = ({ className = 
     setFormErrors({});
   };
 
-  // 跳转到主页面并筛选项目
+  // 跳转到主页面并筛选活跃项目
   const handleJumpToProjects = (workerName: string) => {
-    // 关闭工人管理模式，回到主页面
+    // 关闭工人管理模式，回到主页面的活跃项目视图
     window.dispatchEvent(new CustomEvent('close-worker-management', { 
-      detail: { workerName } 
+      detail: { workerName, viewType: 'active' } // 明确指定跳转到活跃项目
     }));
   };
 

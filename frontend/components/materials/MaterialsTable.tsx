@@ -2,6 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { SortableProjectRow } from './SortableProjectRow';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMaterialStore, useProjectStore, type ProjectState } from '@/stores';
 import { StatusToggle, DrawingHoverCard } from '@/components/ui';
@@ -68,6 +71,10 @@ export const MaterialsTable = ({
   const [movingToPast, setMovingToPast] = useState<number | null>(null);
   const [restoringFromPast, setRestoringFromPast] = useState<number | null>(null);
   
+  // 拖拽排序相关状态
+  const [projectOrder, setProjectOrder] = useState<ProjectState[]>([]);
+  const [isReordering, setIsReordering] = useState(false);
+  
   // 添加hover预览相关状态
   const [hoverCard, setHoverCard] = useState<{
     isVisible: boolean;
@@ -82,6 +89,14 @@ export const MaterialsTable = ({
   const { token, user } = useAuth();
   const { updateMaterialStatus } = useMaterialStore();
   const { projects, completedProjects, pastProjects, updateProject, fetchProjects, moveToPastProject, restoreFromPastProject } = useProjectStore();
+
+  // 配置拖拽传感器
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // 根据视图类型获取对应的项目列表，并应用筛选
   const getProjectsList = (): ProjectState[] => {
@@ -116,12 +131,61 @@ export const MaterialsTable = ({
     return projectList;
   };
 
+  // 同步项目排序状态
+  useEffect(() => {
+    const projectsList = getProjectsList();
+    if (JSON.stringify(projectOrder) !== JSON.stringify(projectsList)) {
+      setProjectOrder(projectsList);
+    }
+  }, [projects, pastProjects, workerNameFilter, thicknessFilter, viewType]);
+
+  // 处理拖拽结束
+  const handleDragEnd = async (event: any) => {
+    const { active, over } = event;
+
+    if (active.id !== over?.id) {
+      const oldIndex = projectOrder.findIndex(project => project.id === active.id);
+      const newIndex = projectOrder.findIndex(project => project.id === over.id);
+      
+      const newOrder = arrayMove(projectOrder, oldIndex, newIndex);
+      setProjectOrder(newOrder);
+
+      // 发送排序更新到后端
+      try {
+        setIsReordering(true);
+        const projectIds = newOrder.map(project => project.id);
+        
+        const response = await fetch('/api/projects/reorder', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({ projectIds }),
+        });
+
+        if (!response.ok) {
+          throw new Error('更新项目排序失败');
+        }
+
+        // 刷新项目数据
+        await fetchProjects();
+      } catch (error) {
+        console.error('更新项目排序失败:', error);
+        // 恢复原来的顺序
+        setProjectOrder(getProjectsList());
+      } finally {
+        setIsReordering(false);
+      }
+    }
+  };
+
   // 如果还没有加载厚度规格，先加载
   useEffect(() => {
-    if (thicknessSpecs.length === 0) {
+    if (token && thicknessSpecs.length === 0) {
       fetchThicknessSpecs();
     }
-  }, []);
+  }, [token]);
 
   // 监听材料更新事件，刷新项目数据
   useEffect(() => {
@@ -138,6 +202,11 @@ export const MaterialsTable = ({
   }, [fetchProjects]);
 
   const fetchThicknessSpecs = async () => {
+    if (!token) {
+      console.log('Token not available, skipping thickness specs fetch');
+      return;
+    }
+    
     try {
       const response = await fetch('/api/thickness-specs', {
         headers: {
@@ -274,7 +343,7 @@ export const MaterialsTable = ({
 
   // 显示项目列表（格式：序号-项目名-工人-2mm-3mm-4mm...-创建时间-开始时间-完成时间-图纸）
   const renderProjectsTable = () => {
-    const projectsToShow = selectedProjectId ? getProjectsList().filter(p => p.id === selectedProjectId) : getProjectsList();
+    const projectsToShow = selectedProjectId ? projectOrder.filter(p => p.id === selectedProjectId) : projectOrder;
     
     return (
       <div className={`bg-white/80 backdrop-blur-xl rounded-2xl border border-gray-200 shadow-lg overflow-hidden flex flex-col ${className}`}>
@@ -284,251 +353,71 @@ export const MaterialsTable = ({
             {selectedProjectId ? `项目详情` : '全部项目'}
           </h3>
           <p className="text-text-secondary text-sm mt-1">
-            {selectedProjectId ? '项目板材状态管理' : '项目总览和板材状态'}
+            {selectedProjectId ? '项目板材状态管理' : '项目总览和板材状态（支持拖拽排序）'}
           </p>
+          {isReordering && (
+            <div className="mt-2 text-xs text-blue-600 flex items-center">
+              <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-600 mr-2"></div>
+              正在保存排序...
+            </div>
+          )}
         </div>
 
         {/* 项目表格 */}
         <div className="flex-1 overflow-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50/50 sticky top-0">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">序号</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">项目名</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">工人</th>
-                {/* 厚度列 */}
-                {thicknessSpecs.map(spec => (
-                  <th key={spec.id} className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {spec.thickness}{spec.unit}
-                  </th>
-                ))}
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">创建时间</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">开始时间</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">完成时间</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">图纸</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {projectsToShow.map((proj, index) => {
-                // 获取项目开始时间：第一个进入in_progress状态的材料时间
-                const getProjectStartTime = (project: ProjectState): string | null => {
-                  if (!project.materials || project.materials.length === 0) return null;
-                  
-                  // 筛选出有startDate且状态为in_progress或completed的材料
-                  const materialsWithStartDate = project.materials.filter(material => 
-                    material.startDate && (material.status === 'in_progress' || material.status === 'completed')
-                  );
-                  
-                  if (materialsWithStartDate.length === 0) return null;
-                  
-                  // 找到最早的startDate
-                  const earliestStartDate = materialsWithStartDate.reduce((earliest, current) => {
-                    if (!earliest.startDate) return current;
-                    if (!current.startDate) return earliest;
-                    return new Date(current.startDate) < new Date(earliest.startDate) ? current : earliest;
-                  });
-                  
-                  return earliestStartDate.startDate || null;
-                };
-
-                const projectStartTime = getProjectStartTime(proj);
-                
-                // 获取项目完成时间：最后一个completed材料的时间，但如果有未完成任务则清空
-                const getProjectCompletedTime = (project: ProjectState): string | null => {
-                  if (!project.materials || project.materials.length === 0) return null;
-                  
-                  // 检查是否有未完成的材料（in_progress或pending状态）
-                  const hasIncompleteTask = project.materials.some(material => 
-                    material.status === 'in_progress' || material.status === 'pending'
-                  );
-                  
-                  // 如果有未完成任务，返回null（显示-）
-                  if (hasIncompleteTask) return null;
-                  
-                  // 获取所有已完成材料中有completedDate的材料
-                  const completedMaterials = project.materials.filter(material => 
-                    material.status === 'completed' && material.completedDate
-                  );
-                  
-                  if (completedMaterials.length === 0) return null;
-                  
-                  // 找到最晚的completedDate
-                  const latestCompletedDate = completedMaterials.reduce((latest, current) => {
-                    if (!latest.completedDate) return current;
-                    if (!current.completedDate) return latest;
-                    return new Date(current.completedDate) > new Date(latest.completedDate) ? current : latest;
-                  });
-                  
-                  return latestCompletedDate.completedDate || null;
-                };
-
-                const projectCompletedTime = getProjectCompletedTime(proj);
-                
-                return (
-                  <motion.tr
-                    key={proj.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: index * 0.05 }}
-                    className="hover:bg-gray-50/50 transition-colors"
-                  >
-                    {/* 序号 */}
-                    <td className="px-4 py-4">
-                      <div className="text-sm font-medium text-text-primary">{index + 1}</div>
-                    </td>
-                    
-                    {/* 项目名 */}
-                    <td className="px-4 py-4">
-                      <div className="font-medium text-text-primary">{proj.name}</div>
-                      <div className="text-xs text-text-secondary">
-                        {getStatusText(proj.status)}
-                      </div>
-                    </td>
-                    
-                    {/* 工人 */}
-                    <td className="px-4 py-4">
-                      <div className="text-sm text-text-primary">
-                        {proj.assignedWorker?.name || '未分配'}
-                      </div>
-                    </td>
-                    
-                    {/* 厚度状态列 */}
-                    {thicknessSpecs.map(spec => {
-                      const materialStatus = getProjectMaterialStatusForTable(proj.id, spec.id);
-                      
-                      return (
-                        <td key={spec.id} className="px-3 py-4 text-center">
-                          <StatusToggle
-                            status={materialStatus as StatusType}
-                            onChange={(newStatus) => {
-                              updateMaterialStatusInTable(proj.id, spec.id, newStatus);
-                            }}
-                            size="md"
-                            disabled={viewType === 'completed'} // 过往项目禁用编辑
-                          />
-                        </td>
-                      );
-                    })}
-                    
-                    {/* 创建时间 */}
-                    <td className="px-4 py-4">
-                      <div className="text-sm text-text-primary">
-                        {proj.createdAt ? new Date(proj.createdAt).toLocaleString('zh-CN', {
-                          year: 'numeric',
-                          month: '2-digit',
-                          day: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        }) : '-'}
-                      </div>
-                    </td>
-                    
-                    {/* 开始时间 */}
-                    <td className="px-4 py-4">
-                      <div className="text-sm text-text-primary">
-                        {projectStartTime ? new Date(projectStartTime).toLocaleString('zh-CN', {
-                          year: 'numeric',
-                          month: '2-digit',
-                          day: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        }) : '-'}
-                      </div>
-                    </td>
-                    
-                    {/* 完成时间 */}
-                    <td className="px-4 py-4">
-                      <div className="text-sm text-text-primary">
-                        {projectCompletedTime ? new Date(projectCompletedTime).toLocaleString('zh-CN', {
-                          year: 'numeric',
-                          month: '2-digit',
-                          day: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        }) : '-'}
-                      </div>
-                    </td>
-                    
-                    {/* 图纸 */}
-                    <td className="px-4 py-4">
-                      <div className="flex items-center space-x-1">
-                        {proj.drawings && proj.drawings.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            <span 
-                              className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded cursor-pointer hover:bg-blue-200 transition-colors"
-                              onMouseEnter={(e) => handleDrawingHover(e, (proj.drawings as any[]).map(d => ({
-                                id: d.id,
-                                projectId: d.projectId,
-                                filename: d.filename,
-                                originalFilename: d.originalFilename,
-                                filePath: d.filePath,
-                                version: d.version,
-                                createdAt: d.createdAt
-                              })))}
-                              onMouseLeave={handleCloseHover}
-                              onClick={() => onProjectSelect(proj.id)}
-                              title={`查看 ${proj.name} 的图纸详情`}
-                            >
-                              {proj.drawings.length}个
-                            </span>
-                            <button 
-                              onClick={() => onProjectSelect(proj.id)}
-                              className="text-xs text-green-600 hover:text-green-800 hover:bg-green-50 px-1 py-1 rounded transition-colors"
-                              title={`为项目 ${proj.name} 添加更多图纸`}
-                            >
-                              +
-                            </button>
-                          </div>
-                        ) : (
-                          <button 
-                            onClick={() => onProjectSelect(proj.id)}
-                            className="text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded transition-colors"
-                            title={`为项目 ${proj.name} 上传图纸`}
-                          >
-                            + 上传图纸
-                          </button>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* 操作 */}
-                    <td className="px-4 py-4">
-                      <div className="flex items-center space-x-2">
-                        {/* 活跃项目视图：显示"移至过往"按钮 */}
-                        {proj.status === 'completed' && viewType !== 'completed' && (
-                          <button
-                            onClick={() => handleMoveToPast(proj.id)}
-                            disabled={movingToPast === proj.id}
-                            className="inline-flex items-center px-2 py-1 text-xs font-medium text-orange-700 bg-orange-100 hover:bg-orange-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors"
-                            title="移动到过往项目"
-                          >
-                            <ArchiveBoxIcon className="w-3 h-3 mr-1" />
-                            {movingToPast === proj.id ? '移动中...' : '移至过往'}
-                          </button>
-                        )}
-                        
-                        {/* 过往项目视图：显示"恢复项目"按钮 */}
-                        {viewType === 'completed' && (
-                          <button
-                            onClick={() => handleRestoreFromPast(proj.id)}
-                            disabled={restoringFromPast === proj.id}
-                            className="inline-flex items-center px-2 py-1 text-xs font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors"
-                            title="恢复到活跃项目"
-                          >
-                            <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                            {restoringFromPast === proj.id ? '恢复中...' : '恢复项目'}
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </motion.tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <DndContext 
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <table className="w-full">
+              <thead className="bg-gray-50/50 sticky top-0">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">序号</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">项目名</th>
+                  {/* 厚度列 */}
+                  {thicknessSpecs.map(spec => (
+                    <th key={spec.id} className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      {spec.thickness}{spec.unit}
+                    </th>
+                  ))}
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">创建时间</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">开始时间</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">完成时间</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">图纸</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                </tr>
+              </thead>
+              <SortableContext 
+                items={projectsToShow.map(p => p.id)} 
+                strategy={verticalListSortingStrategy}
+              >
+                <tbody className="divide-y divide-gray-200">
+                  {projectsToShow.map((proj, index) => (
+                    <SortableProjectRow
+                      key={proj.id}
+                      project={proj}
+                      index={index}
+                      thicknessSpecs={thicknessSpecs}
+                      viewType={viewType}
+                      movingToPast={movingToPast}
+                      restoringFromPast={restoringFromPast}
+                      getProjectMaterialStatusForTable={getProjectMaterialStatusForTable}
+                      updateMaterialStatusInTable={updateMaterialStatusInTable}
+                      handleDrawingHover={handleDrawingHover}
+                      handleCloseHover={handleCloseHover}
+                      onProjectSelect={onProjectSelect}
+                      handleMoveToPast={handleMoveToPast}
+                      handleRestoreFromPast={handleRestoreFromPast}
+                      getStatusText={getStatusText}
+                      getPriorityColorBadge={getPriorityColorBadge}
+                      getPriorityText={getPriorityText}
+                    />
+                  ))}
+                </tbody>
+              </SortableContext>
+            </table>
+          </DndContext>
           
           {projectsToShow.length === 0 && (
             <div className="flex items-center justify-center h-64">
@@ -567,6 +456,33 @@ export const MaterialsTable = ({
       case 'in_progress': return '进行中';
       case 'completed': return '已完成';
       default: return status;
+    }
+  };
+
+  const getPriorityText = (priority: string) => {
+    switch (priority) {
+      case 'high': return '高';
+      case 'medium': return '中';
+      case 'low': return '低';
+      default: return priority;
+    }
+  };
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'high': return 'text-red-700 bg-red-100';
+      case 'medium': return 'text-yellow-700 bg-yellow-100';
+      case 'low': return 'text-green-700 bg-green-100';
+      default: return 'text-gray-700 bg-gray-100';
+    }
+  };
+
+  const getPriorityColorBadge = (priority: string) => {
+    switch (priority) {
+      case 'high': return 'bg-red-500';
+      case 'medium': return 'bg-yellow-500';
+      case 'low': return 'bg-green-500';
+      default: return 'bg-gray-500';
     }
   };
 

@@ -10,6 +10,8 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
   leftIcon?: React.ReactNode
   rightIcon?: React.ReactNode
   variant?: 'default' | 'filled' | 'glass'
+  multiline?: boolean
+  rows?: number
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(({
@@ -19,6 +21,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
   leftIcon,
   rightIcon,
   variant = 'default',
+  multiline = false,
+  rows = 3,
   className = '',
   ...props
 }, ref) => {
@@ -69,20 +73,37 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
           </div>
         )}
         
-        <motion.input
-          ref={ref}
-          className={`
-            ${baseClasses} 
-            ${variantClasses[variant]} 
-            ${errorClasses}
-            ${leftIcon ? 'pl-10' : ''}
-            ${rightIcon ? 'pr-10' : ''}
-            ${className}
-          `}
-          whileFocus={{ scale: 1.01 }}
-          transition={{ duration: 0.2 }}
-          {...props}
-        />
+        {multiline ? (
+          <motion.textarea
+            ref={ref as any}
+            rows={rows}
+            className={`
+              ${baseClasses} 
+              ${variantClasses[variant]} 
+              ${errorClasses}
+              ${leftIcon ? 'pl-10' : ''}
+              ${rightIcon ? 'pr-10' : ''}
+              ${className}
+              resize-none
+            `}
+            whileFocus={{ scale: 1.01 }}
+            transition={{ duration: 0.2 }}
+            {...(props as any)}
+          />
+        ) : (
+          <input
+            ref={ref}
+            className={`
+              ${baseClasses} 
+              ${variantClasses[variant]} 
+              ${errorClasses}
+              ${leftIcon ? 'pl-10' : ''}
+              ${rightIcon ? 'pr-10' : ''}
+              ${className}
+            `}
+            {...props}
+          />
+        )}
         
         {rightIcon && (
           <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-text-secondary">

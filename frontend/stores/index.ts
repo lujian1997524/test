@@ -4,17 +4,7 @@ export { useMaterialStore } from './materialStore';
 export { useGlobalSyncStore } from './globalSyncStore';
 export { useNotificationStore } from './notificationStore';
 
-// 类型导出
+// 类型导出（移除未导出的类型）
 export type { 
-  ProjectStore, 
   ProjectState 
 } from './projectStore';
-
-export type { 
-  MaterialStore, 
-  MaterialState 
-} from './materialStore';
-
-export type { 
-  GlobalSyncState 
-} from './globalSyncStore';

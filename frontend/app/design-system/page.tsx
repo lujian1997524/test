@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react'
 import { Button, Card, Input, StatusIndicator, StatusToggle, Switch, Badge, Alert, Avatar, Skeleton, SkeletonCard, SkeletonList, ProgressBar, ProgressWithSteps, Modal, ConfirmModal, Dropdown, TabBar, Tabs, Slider, RangeSlider, Toast, ToastContainer, useToast, Tooltip, Popover, DatePicker, SearchBar, Empty, EmptyData, EmptySearch, Loading, LoadingSpinner, LoadingDots, LoadingOverlay, Stepper, Breadcrumb, Tree, Rating, Timeline, Pagination } from '../../components/ui'
+import { SearchBox } from '../../components/ui/SearchBox'
+import type { SearchType, SearchResult } from '../../components/ui/SearchBox'
 import { MainLayout } from '../../components/layout'
 import type { StatusType, DropdownOption, TabItem, SearchSuggestion, StepperStep, BreadcrumbItem, TreeNode, TimelineItem } from '../../components/ui'
 
@@ -29,6 +31,11 @@ export default function DesignSystemPage() {
   const [ratingValue, setRatingValue] = useState(0)
   const [paginationCurrent, setPaginationCurrent] = useState(1)
 
+  // 搜索框组件状态
+  const [searchBoxType, setSearchBoxType] = useState<SearchType>('all')
+  const [searchBoxResults, setSearchBoxResults] = useState<SearchResult[]>([])
+  const [searchBoxLoading, setSearchBoxLoading] = useState(false)
+
   // 搜索建议数据
   const searchSuggestions: SearchSuggestion[] = [
     { id: '1', label: '用户管理', value: 'user management', category: '功能', icon: '👥' },
@@ -36,6 +43,66 @@ export default function DesignSystemPage() {
     { id: '3', label: '数据报表', value: 'data reports', category: '报表', icon: '📊' },
     { id: '4', label: '权限控制', value: 'permission control', category: '安全', icon: '🔒' }
   ]
+
+  // 搜索框模拟数据
+  const mockSearchResults: SearchResult[] = [
+    {
+      id: '1',
+      type: 'projects',
+      title: '激光切割项目A',
+      subtitle: '进行中',
+      description: '负责人：张三 | 预计完成：2024-02-15'
+    },
+    {
+      id: '2',
+      type: 'workers',
+      title: '张三',
+      subtitle: '高级工程师',
+      description: '电话：138****1234 | 部门：生产部'
+    },
+    {
+      id: '3',
+      type: 'drawings',
+      title: '设计图纸_V2.3.dwg',
+      subtitle: 'CAD图纸',
+      description: '更新时间：2024-01-20 | 大小：2.5MB'
+    },
+    {
+      id: '4',
+      type: 'materials',
+      title: '3mm碳钢板',
+      subtitle: '板材规格',
+      description: '材质：碳钢 | 厚度：3mm | 状态：可用'
+    }
+  ]
+
+  // 处理搜索框搜索
+  const handleSearchBoxSearch = (query: string, type: SearchType) => {
+    setSearchBoxLoading(true)
+    
+    // 模拟搜索延迟
+    setTimeout(() => {
+      const filtered = mockSearchResults.filter(result => {
+        const matchesType = type === 'all' || result.type === type
+        const matchesQuery = result.title.toLowerCase().includes(query.toLowerCase()) ||
+                           result.subtitle?.toLowerCase().includes(query.toLowerCase()) ||
+                           result.description?.toLowerCase().includes(query.toLowerCase())
+        return matchesType && matchesQuery
+      })
+      
+      setSearchBoxResults(filtered)
+      setSearchBoxLoading(false)
+    }, 500)
+  }
+
+  // 处理搜索结果选择
+  const handleSearchResultSelect = (result: SearchResult) => {
+    console.log('选择搜索结果:', result)
+    addToast({ 
+      message: `选择了：${result.title}`, 
+      type: 'info' 
+    })
+  }
 
   // Stepper 数据
   const stepperSteps: StepperStep[] = [
@@ -155,51 +222,59 @@ export default function DesignSystemPage() {
     { id: 'tab3', label: '帮助', icon: '❓', content: <div className="p-4 text-center">帮助内容</div> }
   ]
 
-  const sidebarItems = [
-    {
-      id: 'design-system',
-      label: '设计系统',
-      active: true,
-      children: [
-        { id: 'colors', label: '颜色系统' },
-        { id: 'typography', label: '字体系统' },
-        { id: 'components', label: '组件库' }
-      ]
-    },
-    {
-      id: 'components-demo',
-      label: '组件演示',
-      children: [
-        { id: 'buttons', label: '按钮' },
-        { id: 'forms', label: '表单' },
-        { id: 'cards', label: '卡片' },
-        { id: 'status', label: '状态指示器' },
-        { id: 'switches', label: '开关' },
-        { id: 'badges', label: '徽章' },
-        { id: 'alerts', label: '警告框' },
-        { id: 'avatars', label: '头像' },
-        { id: 'progress', label: '进度条' },
-        { id: 'skeleton', label: '骨架屏' },
-        { id: 'toast', label: '消息提示' },
-        { id: 'modal', label: '模态框' },
-        { id: 'dropdown', label: '下拉选择' },
-        { id: 'tabs', label: '标签页' },
-        { id: 'slider', label: '滑块' },
-        { id: 'tooltip', label: '工具提示' },
-        { id: 'popover', label: '弹出框' },
-        { id: 'datepicker', label: '日期选择' },
-        { id: 'searchbar', label: '搜索框' },
-        { id: 'empty', label: '空状态' },
-        { id: 'loading', label: '加载动画' },
-        { id: 'stepper', label: '步骤条' },
-        { id: 'breadcrumb', label: '面包屑导航' },
-        { id: 'tree', label: '树形组件' },
-        { id: 'rating', label: '评分组件' },
-        { id: 'timeline', label: '时间轴' },
-        { id: 'pagination', label: '分页组件' }
-      ]
-    }
+  // 快捷导航项目
+  const quickNavItems = [
+    { id: 'colors', label: '颜色系统', icon: '🎨' },
+    { id: 'buttons', label: '按钮', icon: '🔘' },
+    { id: 'inputs', label: '输入框', icon: '📝' },
+    { id: 'status', label: '状态指示器', icon: '🚦' },
+    { id: 'cards', label: '卡片', icon: '🃏' },
+    { id: 'typography', label: '字体系统', icon: '🔤' },
+    { id: 'switches', label: '开关', icon: '🎛️' },
+    { id: 'badges', label: '徽章', icon: '🏷️' },
+    { id: 'alerts', label: '警告框', icon: '⚠️' },
+    { id: 'avatars', label: '头像', icon: '👤' },
+    { id: 'progress', label: '进度条', icon: '📊' },
+    { id: 'skeleton', label: '骨架屏', icon: '💀' },
+    { id: 'toast', label: '消息提示', icon: '🍞' },
+    { id: 'modal', label: '模态框', icon: '🪟' },
+    { id: 'dropdown', label: '下拉选择', icon: '📋' },
+    { id: 'tabs', label: '标签页', icon: '📑' },
+    { id: 'slider', label: '滑块', icon: '🎚️' },
+    { id: 'tooltip', label: '工具提示', icon: '💬' },
+    { id: 'popover', label: '弹出框', icon: '💭' },
+    { id: 'datepicker', label: '日期选择', icon: '📅' },
+    { id: 'searchbar', label: '搜索框', icon: '🔍' },
+    { id: 'searchbox', label: '全局搜索框', icon: '🔎' },
+    { id: 'empty', label: '空状态', icon: '📭' },
+    { id: 'loading', label: '加载动画', icon: '⏳' },
+    { id: 'stepper', label: '步骤条', icon: '👣' },
+    { id: 'breadcrumb', label: '面包屑导航', icon: '🍞' },
+    { id: 'tree', label: '树形组件', icon: '🌳' },
+    { id: 'rating', label: '评分组件', icon: '⭐' },
+    { id: 'timeline', label: '时间轴', icon: '⏰' },
+    { id: 'pagination', label: '分页组件', icon: '📄' }
   ]
+
+  // 快捷导航滚动函数
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId)
+    if (element) {
+      element.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'start',
+        inline: 'nearest'
+      })
+    }
+  }
+
+  // 为了兼容原有的侧边栏结构，保留原来的格式但简化
+  const sidebarItems = quickNavItems.map(item => ({
+    id: item.id,
+    label: item.label,
+    icon: item.icon,
+    onClick: () => scrollToSection(item.id)
+  }))
 
   return (
     <MainLayout
@@ -214,28 +289,31 @@ export default function DesignSystemPage() {
     >
       <div className="space-y-8">
         {/* 颜色系统 */}
-        <Card>
-          <h2 className="text-xl font-bold text-text-primary mb-4">iOS 18 颜色系统</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {[
-              { name: '蓝色', class: 'bg-ios18-blue', hex: '#0A84FF' },
-              { name: '靛蓝', class: 'bg-ios18-indigo', hex: '#5E5CE6' },
-              { name: '紫色', class: 'bg-ios18-purple', hex: '#AF52DE' },
-              { name: '青色', class: 'bg-ios18-teal', hex: '#30D158' },
-              { name: '薄荷', class: 'bg-ios18-mint', hex: '#00C7BE' },
-              { name: '棕色', class: 'bg-ios18-brown', hex: '#AC8E68' }
-            ].map(color => (
-              <div key={color.name} className="text-center">
-                <div className={`w-full h-16 ${color.class} rounded-ios-lg mb-2`}></div>
-                <p className="text-sm font-medium text-text-primary">{color.name}</p>
-                <p className="text-xs text-text-secondary">{color.hex}</p>
-              </div>
-            ))}
-          </div>
-        </Card>
+        <div id="colors">
+          <Card>
+            <h2 className="text-xl font-bold text-text-primary mb-4">iOS 18 颜色系统</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {[
+                { name: '蓝色', class: 'bg-ios18-blue', hex: '#0A84FF' },
+                { name: '靛蓝', class: 'bg-ios18-indigo', hex: '#5E5CE6' },
+                { name: '紫色', class: 'bg-ios18-purple', hex: '#AF52DE' },
+                { name: '青色', class: 'bg-ios18-teal', hex: '#30D158' },
+                { name: '薄荷', class: 'bg-ios18-mint', hex: '#00C7BE' },
+                { name: '棕色', class: 'bg-ios18-brown', hex: '#AC8E68' }
+              ].map(color => (
+                <div key={color.name} className="text-center">
+                  <div className={`w-full h-16 ${color.class} rounded-ios-lg mb-2`}></div>
+                  <p className="text-sm font-medium text-text-primary">{color.name}</p>
+                  <p className="text-xs text-text-secondary">{color.hex}</p>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
 
         {/* 按钮组件 */}
-        <Card>
+        <div id="buttons">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">按钮组件</h2>
           <div className="space-y-4">
             <div className="flex flex-wrap gap-4">
@@ -258,10 +336,12 @@ export default function DesignSystemPage() {
               </Button>
             </div>
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* 输入框组件 */}
-        <Card>
+        <div id="inputs">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">输入框组件</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
@@ -307,10 +387,12 @@ export default function DesignSystemPage() {
               />
             </div>
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* 状态指示器组件 */}
-        <Card>
+        <div id="status">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">状态指示器</h2>
           <div className="space-y-6">
             <div>
@@ -344,10 +426,12 @@ export default function DesignSystemPage() {
               </div>
             </div>
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* 卡片组件 */}
-        <Card>
+        <div id="cards">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">卡片组件</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card padding="md" glass={true}>
@@ -371,10 +455,12 @@ export default function DesignSystemPage() {
               </p>
             </Card>
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* Typography */}
-        <Card>
+        <div id="typography">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">字体系统</h2>
           <div className="space-y-4">
             <div className="text-4xl font-bold text-text-primary">大标题 (34px)</div>
@@ -386,10 +472,12 @@ export default function DesignSystemPage() {
             <div className="text-sm text-text-secondary">次要文字 (15px)</div>
             <div className="text-xs text-text-tertiary">辅助文字 (13px)</div>
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* Switch组件 */}
-        <Card>
+        <div id="switches">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">开关组件</h2>
           <div className="space-y-6">
             <div>
@@ -424,10 +512,12 @@ export default function DesignSystemPage() {
               </div>
             </div>
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* Badge组件 */}
-        <Card>
+        <div id="badges">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">徽章组件</h2>
           <div className="space-y-6">
             <div>
@@ -470,10 +560,12 @@ export default function DesignSystemPage() {
               </div>
             </div>
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* Alert组件 */}
-        <Card>
+        <div id="alerts">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">警告框组件</h2>
           <div className="space-y-4">
             {alertVisible && (
@@ -503,10 +595,12 @@ export default function DesignSystemPage() {
               这是一个没有标题的简单提示信息。
             </Alert>
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* Avatar组件 */}
-        <Card>
+        <div id="avatars">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">头像组件</h2>
           <div className="space-y-6">
             <div>
@@ -553,10 +647,12 @@ export default function DesignSystemPage() {
               </div>
             </div>
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* Progress组件 */}
-        <Card>
+        <div id="progress">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">进度条组件</h2>
           <div className="space-y-6">
             <div>
@@ -599,10 +695,12 @@ export default function DesignSystemPage() {
               />
             </div>
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* Skeleton组件 */}
-        <Card>
+        <div id="skeleton">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">骨架屏组件</h2>
           <div className="space-y-6">
             <div>
@@ -646,10 +744,12 @@ export default function DesignSystemPage() {
               <SkeletonList items={3} />
             </div>
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* Toast组件 */}
-        <Card>
+        <div id="toast">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">消息提示组件</h2>
           <div className="space-y-4">
             <div className="flex flex-wrap gap-3">
@@ -668,10 +768,12 @@ export default function DesignSystemPage() {
             </div>
             <p className="text-sm text-gray-600">点击按钮查看不同类型的消息提示</p>
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* Modal组件 */}
-        <Card>
+        <div id="modal">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">模态框组件</h2>
           <div className="space-y-4">
             <div className="flex flex-wrap gap-3">
@@ -712,10 +814,12 @@ export default function DesignSystemPage() {
               type="warning"
             />
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* Dropdown组件 */}
-        <Card>
+        <div id="dropdown">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">下拉选择组件</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
@@ -763,10 +867,12 @@ export default function DesignSystemPage() {
               </div>
             </div>
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* TabBar组件 */}
-        <Card>
+        <div id="tabs">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">标签页组件</h2>
           <div className="space-y-6">
             <div>
@@ -798,10 +904,12 @@ export default function DesignSystemPage() {
               />
             </div>
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* Slider组件 */}
-        <Card>
+        <div id="slider">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">滑块组件</h2>
           <div className="space-y-6">
             <div>
@@ -853,10 +961,12 @@ export default function DesignSystemPage() {
               />
             </div>
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* Tooltip组件 */}
-        <Card>
+        <div id="tooltip">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">工具提示组件</h2>
           <div className="space-y-6">
             <div>
@@ -892,10 +1002,12 @@ export default function DesignSystemPage() {
               </div>
             </div>
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* Popover组件 */}
-        <Card>
+        <div id="popover">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">弹出框组件</h2>
           <div className="space-y-6">
             <div>
@@ -967,10 +1079,12 @@ export default function DesignSystemPage() {
               </div>
             </div>
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* DatePicker组件 */}
-        <Card>
+        <div id="datepicker">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">日期选择器组件</h2>
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1009,10 +1123,12 @@ export default function DesignSystemPage() {
               </div>
             </div>
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* SearchBar组件 */}
-        <Card>
+        <div id="searchbar">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">搜索框组件</h2>
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1053,10 +1169,97 @@ export default function DesignSystemPage() {
               </div>
             </div>
           </div>
-        </Card>
+          </Card>
+        </div>
+
+        {/* 新版SearchBox组件 - 全局搜索框 */}
+        <div id="searchbox">
+          <Card>
+          <h2 className="text-xl font-bold text-text-primary mb-4">全局搜索框组件</h2>
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-medium text-text-primary mb-3">基础样式</h3>
+              <div className="space-y-4">
+                <SearchBox
+                  placeholder="搜索项目、工人、图纸..."
+                  searchType={searchBoxType}
+                  onSearchTypeChange={setSearchBoxType}
+                  onSearch={handleSearchBoxSearch}
+                  onResultSelect={handleSearchResultSelect}
+                  results={searchBoxResults}
+                  loading={searchBoxLoading}
+                />
+                
+                <div className="text-sm text-gray-600">
+                  <p>• 支持类型选择：全部内容、活跃项目、工人、图纸、板材规格</p>
+                  <p>• 实时搜索：输入2个字符后开始搜索</p>
+                  <p>• 键盘导航：支持上下箭头选择，Enter确认，Escape关闭</p>
+                  <p>• 点击外部区域自动关闭下拉菜单</p>
+                </div>
+              </div>
+            </div>
+            
+            <div>
+              <h3 className="text-lg font-medium text-text-primary mb-3">不同宽度展示</h3>
+              <div className="space-y-4">
+                <div className="max-w-sm">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">小宽度 (max-w-sm)</label>
+                  <SearchBox
+                    placeholder="搜索..."
+                    className="w-full"
+                  />
+                </div>
+                
+                <div className="max-w-md">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">中等宽度 (max-w-md)</label>
+                  <SearchBox
+                    placeholder="搜索项目、工人、图纸..."
+                    className="w-full"
+                  />
+                </div>
+                
+                <div className="max-w-lg">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">大宽度 (max-w-lg)</label>
+                  <SearchBox
+                    placeholder="搜索项目、工人、图纸、板材规格..."
+                    className="w-full"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div>
+              <h3 className="text-lg font-medium text-text-primary mb-3">功能特性演示</h3>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <h4 className="font-medium mb-2">🔍 搜索功能</h4>
+                    <ul className="space-y-1 text-gray-600">
+                      <li>• 输入"项目"搜索项目</li>
+                      <li>• 输入"张三"搜索工人</li>
+                      <li>• 输入"图纸"搜索图纸</li>
+                      <li>• 输入"3mm"搜索板材</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="font-medium mb-2">⌨️ 键盘操作</h4>
+                    <ul className="space-y-1 text-gray-600">
+                      <li>• ↑↓ 选择结果</li>
+                      <li>• Enter 确认选择</li>
+                      <li>• Escape 关闭面板</li>
+                      <li>• Tab 切换焦点</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          </Card>
+        </div>
 
         {/* Empty组件 */}
-        <Card>
+        <div id="empty">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">空状态组件</h2>
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1094,10 +1297,12 @@ export default function DesignSystemPage() {
               </div>
             </div>
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* Loading组件 */}
-        <Card>
+        <div id="loading">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">加载动画组件</h2>
           <div className="space-y-6">
             <div>
@@ -1157,10 +1362,12 @@ export default function DesignSystemPage() {
               </div>
             </div>
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* Stepper组件 */}
-        <Card>
+        <div id="stepper">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">步骤条组件</h2>
           <div className="space-y-6">
             <div>
@@ -1200,10 +1407,12 @@ export default function DesignSystemPage() {
               </div>
             </div>
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* Breadcrumb组件 */}
-        <Card>
+        <div id="breadcrumb">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">面包屑导航组件</h2>
           <div className="space-y-6">
             <div>
@@ -1240,10 +1449,12 @@ export default function DesignSystemPage() {
               />
             </div>
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* Tree组件 */}
-        <Card>
+        <div id="tree">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">树形组件</h2>
           <div className="space-y-6">
             <div>
@@ -1278,10 +1489,12 @@ export default function DesignSystemPage() {
               </div>
             </div>
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* Rating组件 */}
-        <Card>
+        <div id="rating">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">评分组件</h2>
           <div className="space-y-6">
             <div>
@@ -1326,10 +1539,12 @@ export default function DesignSystemPage() {
               />
             </div>
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* Timeline组件 */}
-        <Card>
+        <div id="timeline">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">时间轴组件</h2>
           <div className="space-y-6">
             <div>
@@ -1350,10 +1565,12 @@ export default function DesignSystemPage() {
               />
             </div>
           </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* Pagination组件 */}
-        <Card>
+        <div id="pagination">
+          <Card>
           <h2 className="text-xl font-bold text-text-primary mb-4">分页组件</h2>
           <div className="space-y-6">
             <div>
@@ -1400,7 +1617,8 @@ export default function DesignSystemPage() {
               />
             </div>
           </div>
-        </Card>
+          </Card>
+        </div>
       </div>
       
       {/* Toast容器 */}

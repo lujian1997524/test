@@ -268,7 +268,7 @@ export const Popover: React.FC<PopoverProps> = ({
               </div>
               
               {/* 箭头 */}
-              {arrow && <div className={getArrowStyle()} />}
+              {arrow && <div className={getArrowStyle() || ''} />}
             </motion.div>
           )}
         </AnimatePresence>,

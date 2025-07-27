@@ -59,6 +59,7 @@ export const DrawingLibrary: React.FC<DrawingLibraryProps> = ({
   const [editingDrawing, setEditingDrawing] = useState<Drawing | null>(null);
   const [editDescription, setEditDescription] = useState('');
   const [editStatus, setEditStatus] = useState<'可用' | '已废弃' | '已归档'>('可用');
+  const [editFilename, setEditFilename] = useState('');
 
   const { token } = useAuth();
 
@@ -100,13 +101,13 @@ export const DrawingLibrary: React.FC<DrawingLibraryProps> = ({
     // 转换Drawing为DxfPreviewModal所需格式
     const dxfDrawing = {
       id: drawing.id,
-      projectId: drawing.projectIds?.[0] || 0, // 使用第一个关联项目ID，或默认为0
+      projectId: 0, // 图纸库中的图纸没有关联项目
       filename: drawing.filename,
       originalFilename: drawing.originalName,
       filePath: drawing.filePath,
       version: drawing.version,
       createdAt: drawing.createdAt,
-      uploader: drawing.uploader ? { id: drawing.uploadedBy, name: drawing.uploader.name } : undefined
+      uploader: drawing.uploadedBy ? { id: drawing.uploadedBy, name: '未知用户' } : undefined
     };
     setPreviewDrawing(dxfDrawing as any);
     setShowPreview(true);
@@ -117,6 +118,7 @@ export const DrawingLibrary: React.FC<DrawingLibraryProps> = ({
     setEditingDrawing(drawing);
     setEditDescription(drawing.description || '');
     setEditStatus(drawing.status);
+    setEditFilename(drawing.originalName || drawing.filename);
     setShowEditModal(true);
   };
 
@@ -174,6 +176,25 @@ export const DrawingLibrary: React.FC<DrawingLibraryProps> = ({
   const handleEditSubmit = async () => {
     if (!editingDrawing) return;
 
+    // 验证文件名
+    if (!editFilename.trim()) {
+      setError('文件名不能为空');
+      return;
+    }
+
+    // 检查文件名格式
+    if (!editFilename.toLowerCase().endsWith('.dxf')) {
+      setError('文件名必须以 .dxf 结尾');
+      return;
+    }
+
+    // 检查非法字符
+    const invalidChars = /[<>:"/\\|?*]/;
+    if (invalidChars.test(editFilename)) {
+      setError('文件名不能包含以下字符: < > : " / \\ | ? *');
+      return;
+    }
+
     try {
       const response = await fetch(`/api/drawings/${editingDrawing.id}`, {
         method: 'PUT',
@@ -183,7 +204,8 @@ export const DrawingLibrary: React.FC<DrawingLibraryProps> = ({
         },
         body: JSON.stringify({
           description: editDescription,
-          status: editStatus
+          status: editStatus,
+          originalFilename: editFilename
         })
       });
 
@@ -192,6 +214,8 @@ export const DrawingLibrary: React.FC<DrawingLibraryProps> = ({
         setShowEditModal(false);
         setEditingDrawing(null);
         setError(null);
+        // 触发图纸更新事件
+        window.dispatchEvent(new CustomEvent('drawing-updated'));
       } else {
         const errorData = await response.json();
         throw new Error(errorData.error || '更新失败');
@@ -205,6 +229,13 @@ export const DrawingLibrary: React.FC<DrawingLibraryProps> = ({
   useEffect(() => {
     fetchDrawings();
   }, [token, selectedCategory, sortMode]);
+
+  // 当分类改变时，通知父组件
+  useEffect(() => {
+    if (onCategoryChange && selectedCategory !== 'all') {
+      // 只在非默认分类时调用回调
+    }
+  }, [selectedCategory, onCategoryChange]);
 
   // 筛选和排序图纸（主要处理搜索，分类由后端处理）
   const filteredDrawings = React.useMemo(() => {
@@ -256,6 +287,8 @@ export const DrawingLibrary: React.FC<DrawingLibraryProps> = ({
   const handleUploadSuccess = () => {
     fetchDrawings();
     setShowUpload(false);
+    // 触发图纸更新事件
+    window.dispatchEvent(new CustomEvent('drawing-updated'));
   };
 
   // 处理图纸删除
@@ -274,6 +307,8 @@ export const DrawingLibrary: React.FC<DrawingLibraryProps> = ({
 
       if (response.ok) {
         fetchDrawings();
+        // 触发图纸更新事件
+        window.dispatchEvent(new CustomEvent('drawing-updated'));
       } else {
         throw new Error('删除图纸失败');
       }
@@ -534,7 +569,7 @@ export const DrawingLibrary: React.FC<DrawingLibraryProps> = ({
 
       {/* DXF预览模态框 */}
       <DxfPreviewModal
-        drawing={previewDrawing}
+        drawing={previewDrawing as any}
         isOpen={showPreview}
         onClose={() => {
           setShowPreview(false);
@@ -548,21 +583,28 @@ export const DrawingLibrary: React.FC<DrawingLibraryProps> = ({
         onClose={() => {
           setShowEditModal(false);
           setEditingDrawing(null);
+          setEditFilename('');
+          setEditDescription('');
+          setEditStatus('可用');
         }}
         title="编辑图纸信息"
         size="md"
       >
         <div className="space-y-4">
-          {/* 文件名（只读） */}
+          {/* 文件名（可编辑） */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               文件名
             </label>
             <Input
-              value={editingDrawing?.originalName || ''}
-              disabled
-              className="bg-gray-50"
+              value={editFilename}
+              onChange={(e) => setEditFilename(e.target.value)}
+              placeholder="输入文件名（必须以.dxf结尾）"
+              className="w-full"
             />
+            <p className="text-xs text-gray-500 mt-1">
+              文件名不能包含: &lt; &gt; : " / \ | ? *
+            </p>
           </div>
 
           {/* 描述 */}
@@ -573,7 +615,7 @@ export const DrawingLibrary: React.FC<DrawingLibraryProps> = ({
             <Input
               placeholder="输入图纸描述..."
               value={editDescription}
-              onChange={setEditDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
               multiline
               rows={3}
             />
@@ -603,6 +645,9 @@ export const DrawingLibrary: React.FC<DrawingLibraryProps> = ({
               onClick={() => {
                 setShowEditModal(false);
                 setEditingDrawing(null);
+                setEditFilename('');
+                setEditDescription('');
+                setEditStatus('可用');
               }}
             >
               取消

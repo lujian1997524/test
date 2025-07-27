@@ -69,7 +69,7 @@ export const DrawingList: React.FC<DrawingListProps> = ({
       case '可用':
         return 'success';
       case '已废弃':
-        return 'error';
+        return 'danger';
       case '已归档':
         return 'secondary';
       default:

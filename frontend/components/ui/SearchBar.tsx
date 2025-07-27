@@ -291,17 +291,17 @@ export const SearchBar: React.FC<SearchBarProps> = ({
                     <div className="font-medium truncate">
                       {option.label}
                     </div>
-                    {option.description && (
+                    {'description' in option && option.description && (
                       <div className="text-xs text-gray-500 truncate">
-                        {option.description}
+                        {'description' in option ? option.description : ''}
                       </div>
                     )}
                   </div>
 
                   {/* 分类标签 */}
-                  {option.category && (
+                  {'category' in option && option.category && (
                     <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                      {option.category}
+                      {'category' in option ? option.category : ''}
                     </div>
                   )}
                 </motion.div>

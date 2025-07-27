@@ -34,15 +34,15 @@ export const DrawingUpload: React.FC<DrawingUploadProps> = ({
   const { token } = useAuth();
 
   // 处理文件选择
-  const handleFilesSelected = (selectedFiles: File[]) => {
-    const newFiles: UploadFile[] = selectedFiles.map(file => ({
-      file,
+  const handleFileSelected = (selectedFile: File) => {
+    const newFile: UploadFile = {
+      file: selectedFile,
       id: Math.random().toString(36).substr(2, 9),
       progress: 0,
       status: 'pending'
-    }));
+    };
     
-    setFiles(prev => [...prev, ...newFiles]);
+    setFiles(prev => [...prev, newFile]);
     setError(null);
   };
 
@@ -220,10 +220,9 @@ export const DrawingUpload: React.FC<DrawingUploadProps> = ({
             选择文件
           </label>
           <FileDropzone
-            onFilesSelected={handleFilesSelected}
+            onFileSelect={handleFileSelected}
             accept=".dxf" // 只支持DXF文件
             maxSize={50 * 1024 * 1024} // 50MB
-            multiple
           />
           <p className="text-xs text-gray-500 mt-1">
             仅支持 DXF文件(.dxf)，单个文件最大50MB
@@ -258,7 +257,7 @@ export const DrawingUpload: React.FC<DrawingUploadProps> = ({
                         {uploadFile.status === 'uploading' && (
                           <div className="mt-1">
                             <ProgressBar 
-                              progress={uploadFile.progress} 
+                              value={uploadFile.progress} 
                               size="sm"
                               className="w-full"
                             />
@@ -299,7 +298,7 @@ export const DrawingUpload: React.FC<DrawingUploadProps> = ({
           <Input
             placeholder="输入图纸描述信息..."
             value={description}
-            onChange={setDescription}
+            onChange={(e) => setDescription(e.target.value)}
             multiline
             rows={3}
           />
@@ -313,7 +312,7 @@ export const DrawingUpload: React.FC<DrawingUploadProps> = ({
           <Input
             placeholder="输入标签，用逗号分隔..."
             value={tags}
-            onChange={setTags}
+            onChange={(e) => setTags(e.target.value)}
           />
           <p className="text-xs text-gray-500 mt-1">
             例如：机械图纸,v2.0,重要

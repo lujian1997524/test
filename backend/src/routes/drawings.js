@@ -334,7 +334,7 @@ router.post('/upload', authenticate, upload.single('drawing'), async (req, res) 
 router.put('/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const { description, status, projectIds } = req.body;
+    const { description, status, projectIds, originalFilename } = req.body;
 
     const drawing = await Drawing.findByPk(id);
     if (!drawing) {
@@ -350,10 +350,36 @@ router.put('/:id', authenticate, async (req, res) => {
       });
     }
 
+    // 验证原始文件名格式（如果提供了的话）
+    if (originalFilename !== undefined) {
+      if (!originalFilename || originalFilename.trim().length === 0) {
+        return res.status(400).json({
+          error: '文件名不能为空'
+        });
+      }
+      
+      // 检查文件名中是否包含非法字符
+      const invalidChars = /[<>:"/\\|?*]/;
+      if (invalidChars.test(originalFilename)) {
+        return res.status(400).json({
+          error: '文件名不能包含以下字符: < > : " / \\ | ? *'
+        });
+      }
+      
+      // 确保文件名有正确的扩展名
+      const fileExt = path.extname(originalFilename.toLowerCase());
+      if (!fileExt || fileExt !== '.dxf') {
+        return res.status(400).json({
+          error: '文件名必须以 .dxf 结尾'
+        });
+      }
+    }
+
     // 更新图纸信息
     await drawing.update({
       description: description !== undefined ? description : drawing.description,
-      status: status !== undefined ? status : drawing.status
+      status: status !== undefined ? status : drawing.status,
+      originalFilename: originalFilename !== undefined ? originalFilename : drawing.originalFilename
     });
 
     // 获取更新后的完整信息
