@@ -21,7 +21,7 @@ class AudioManager {
   };
 
   constructor() {
-    // 从localStorage读取用户设置，默认启用
+    // 从localStorage读取用户设置，默认禁用音频功能
     // 只在浏览器环境中访问localStorage
     let savedConfig = null;
     if (typeof window !== 'undefined') {
@@ -33,14 +33,14 @@ class AudioManager {
     }
     
     this.config = savedConfig ? JSON.parse(savedConfig) : {
-      enabled: true,
-      volume: 0.6 // 默认音量60%
+      enabled: false, // 默认禁用音频功能
+      volume: 0.6     // 默认音量60%
     };
 
-    // 预加载音频文件（只在浏览器环境中）
-    if (typeof window !== 'undefined') {
-      this.preloadSounds();
-    }
+    // 暂时禁用音频预加载以避免文件加载错误
+    // if (typeof window !== 'undefined') {
+    //   this.preloadSounds();
+    // }
   }
 
   /**

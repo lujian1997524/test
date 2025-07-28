@@ -2,14 +2,18 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Button, Card, Input } from '@/components/ui';
+import { Button, Card, Input, Table, TableHeader, TableBody, TableRow, TableCell, Form, FormField, FormActions } from '@/components/ui';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface Worker {
   id: number;
   name: string;
-  phone: string;  // 手机号改为必填
+  phone: string;
+  email?: string;
   department?: string;
+  departmentId?: number;
+  position?: string;
+  status?: string;
   projectCount?: number;  // 关联项目数量
   createdAt: string;
   updatedAt: string;
@@ -18,32 +22,57 @@ interface Worker {
 interface Department {
   id: number;
   name: string;
-  workerCount?: number;
+  workerCount: number;
 }
 
 interface WorkerManagementProps {
   className?: string;
   onClose?: () => void;
+  selectedDepartment?: string;
+  onDepartmentChange?: (department: string) => void;
 }
 
-export const WorkerManagement: React.FC<WorkerManagementProps> = ({ className = '', onClose }) => {
+export const WorkerManagement: React.FC<WorkerManagementProps> = ({ 
+  className = '', 
+  onClose, 
+  selectedDepartment: propSelectedDepartment = 'all',
+  onDepartmentChange: propOnDepartmentChange
+}) => {
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
+  const [selectedDepartment, setSelectedDepartment] = useState<string>(propSelectedDepartment);
   const [loading, setLoading] = useState(true);
   const [editingWorker, setEditingWorker] = useState<Worker | null>(null);
   const [showModal, setShowModal] = useState(false);
-  const [showDepartmentModal, setShowDepartmentModal] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
-    department: ''
+    departmentId: ''
   });
-  const [departmentFormData, setDepartmentFormData] = useState({ name: '' });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const { token, user } = useAuth();
   const isAdmin = user?.role === 'admin';
+
+  // 获取部门列表
+  const fetchDepartments = async () => {
+    if (!token) return;
+    
+    try {
+      const response = await fetch('/api/workers/departments', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setDepartments(data.departments || []);
+      }
+    } catch (error) {
+      console.error('获取部门列表失败:', error);
+    }
+  };
 
   // 获取工人列表
   const fetchWorkers = async () => {
@@ -73,99 +102,35 @@ export const WorkerManagement: React.FC<WorkerManagementProps> = ({ className = 
     }
   };
 
-  // 获取部门列表
-  const fetchDepartments = async () => {
-    if (!token) {
-      console.warn('没有token，无法获取部门数据');
-      return;
-    }
-    
-    try {
-      const response = await fetch('/api/departments', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setDepartments(data.departments || data);
-      } else {
-        console.error('获取部门数据失败:', response.status, response.statusText);
-      }
-    } catch (error) {
-      console.error('获取部门数据失败:', error);
-    }
-  };
-
-  // 创建部门
-  const createDepartment = async (name: string) => {
-    if (!token) {
-      console.warn('没有token，无法创建部门');
-      return;
-    }
-    
-    try {
-      const response = await fetch('/api/departments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ name: name.trim() })
-      });
-      
-      if (response.ok) {
-        fetchDepartments();
-        return true;
-      } else {
-        const errorData = await response.json();
-        alert(`创建部门失败: ${errorData.message || '未知错误'}`);
-        return false;
-      }
-    } catch (error) {
-      console.error('创建部门失败:', error);
-      alert('创建失败，请重试');
-      return false;
-    }
-  };
-
-  // 删除部门
-  const deleteDepartment = async (departmentId: number, departmentName: string) => {
-    if (!token) {
-      console.warn('没有token，无法删除部门');
-      return;
-    }
-    
-    try {
-      const response = await fetch(`/api/departments/${departmentId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (response.ok) {
-        fetchDepartments();
-        return true;
-      } else {
-        const errorData = await response.json();
-        alert(`删除部门失败: ${errorData.message || '未知错误'}`);
-        return false;
-      }
-    } catch (error) {
-      console.error('删除部门失败:', error);
-      alert('删除失败，请重试');
-      return false;
-    }
-  };
-
   useEffect(() => {
     if (token) {
       fetchWorkers();
       fetchDepartments();
     }
   }, [token]);
+
+  // 同步外部selectedDepartment变化
+  useEffect(() => {
+    setSelectedDepartment(propSelectedDepartment);
+  }, [propSelectedDepartment]);
+
+  // 监听刷新事件
+  useEffect(() => {
+    const handleRefresh = () => {
+      fetchWorkers();
+    };
+
+    window.addEventListener('refresh-workers', handleRefresh);
+    return () => {
+      window.removeEventListener('refresh-workers', handleRefresh);
+    };
+  }, []);
+
+  // 部门变化处理
+  const handleDepartmentChange = (department: string) => {
+    setSelectedDepartment(department);
+    propOnDepartmentChange?.(department);
+  };
 
   // 表单验证
   const validateForm = () => {
@@ -190,7 +155,7 @@ export const WorkerManagement: React.FC<WorkerManagementProps> = ({ className = 
     setFormData({
       name: '',
       phone: '',
-      department: ''
+      departmentId: ''
     });
     setEditingWorker(null);
     setFormErrors({});
@@ -231,7 +196,7 @@ export const WorkerManagement: React.FC<WorkerManagementProps> = ({ className = 
     setFormData({
       name: worker.name,
       phone: worker.phone,
-      department: worker.department || ''
+      departmentId: worker.departmentId ? worker.departmentId.toString() : ''
     });
     setFormErrors({});
     setShowModal(true);
@@ -257,6 +222,44 @@ export const WorkerManagement: React.FC<WorkerManagementProps> = ({ className = 
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(formData)
+      });
+
+      if (response.ok) {
+        setShowModal(false);
+        resetForm();
+        fetchWorkers();
+      } else {
+        const errorData = await response.json();
+        alert(`操作失败: ${errorData.message || '未知错误'}`);
+      }
+    } catch (error) {
+      console.error('保存工人数据失败:', error);
+      alert('保存失败，请重试');
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
+
+  // 处理工人表单提交
+  const handleWorkerFormSubmit = async () => {
+    try {
+      setSubmitLoading(true);
+      const url = editingWorker ? `/api/workers/${editingWorker.id}` : '/api/workers';
+      const method = editingWorker ? 'PUT' : 'POST';
+      
+      // 准备提交数据，转换 departmentId 为数字或 null
+      const submitData = {
+        ...formData,
+        departmentId: formData.departmentId ? parseInt(formData.departmentId) : null
+      };
+      
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(submitData)
       });
 
       if (response.ok) {
@@ -332,16 +335,6 @@ export const WorkerManagement: React.FC<WorkerManagementProps> = ({ className = 
           {isAdmin && (
             <div className="flex items-center space-x-2">
               <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setShowDepartmentModal(true)}
-              >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
-                部门管理
-              </Button>
-              <Button
                 variant="primary"
                 size="sm"
                 onClick={openCreateModal}
@@ -355,39 +348,15 @@ export const WorkerManagement: React.FC<WorkerManagementProps> = ({ className = 
           )}
         </div>
 
-        {/* 部门筛选 */}
+        {/* 当前筛选状态 */}
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium text-text-secondary">筛选部门:</span>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setSelectedDepartment('all')}
-            className={`px-3 py-1 rounded-full text-sm transition-all ${
-              selectedDepartment === 'all'
-                ? 'bg-ios18-blue text-white'
-                : 'bg-macos15-control text-text-secondary hover:bg-macos15-control/80'
-            }`}
-          >
-            全部 ({workers.length})
-          </motion.button>
-          {departments.map(dept => {
-            const count = workers.filter(w => w.department === dept.name).length;
-            return (
-              <motion.button
-                key={dept.id}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setSelectedDepartment(dept.name)}
-                className={`px-3 py-1 rounded-full text-sm transition-all ${
-                  selectedDepartment === dept.name
-                    ? 'bg-ios18-blue text-white'
-                    : 'bg-macos15-control text-text-secondary hover:bg-macos15-control/80'
-                }`}
-              >
-                {dept.name} ({count})
-              </motion.button>
-            );
-          })}
+          <span className="text-sm font-medium text-text-secondary">当前筛选:</span>
+          <div className="px-3 py-1 bg-ios18-blue/10 text-ios18-blue rounded-full text-sm font-medium">
+            {selectedDepartment === 'all' ? '全部工人' : selectedDepartment}
+          </div>
+          <span className="text-xs text-gray-500">
+            ({filteredWorkers.length} 人)
+          </span>
         </div>
       </Card>
 
@@ -450,38 +419,36 @@ export const WorkerManagement: React.FC<WorkerManagementProps> = ({ className = 
 
                 {/* 该部门的工人列表 */}
                 <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-macos15-control/10">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">姓名</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">电话</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">项目数量</th>
+                  <Table className="w-full">
+                    <TableHeader className="bg-macos15-control/10">
+                      <TableRow>
+                        <TableCell type="header" className="px-6 py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">姓名</TableCell>
+                        <TableCell type="header" className="px-6 py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">电话</TableCell>
+                        <TableCell type="header" className="px-6 py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">项目数量</TableCell>
                         {isAdmin && (
-                          <th className="px-6 py-3 text-right text-xs font-semibold text-text-secondary uppercase tracking-wider">操作</th>
+                          <TableCell type="header" className="px-6 py-3 text-right text-xs font-semibold text-text-secondary uppercase tracking-wider">操作</TableCell>
                         )}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-macos15-separator">
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody className="divide-y divide-macos15-separator">
                       <AnimatePresence>
                         {deptWorkers.map((worker, index) => (
-                          <motion.tr
+                          <TableRow
                             key={worker.id}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -20 }}
-                            transition={{ duration: 0.3, delay: index * 0.05 }}
+                            animate={true}
+                            index={index}
                             className="hover:bg-macos15-control/20 transition-colors"
                           >
-                            <td className="px-6 py-4 whitespace-nowrap">
+                            <TableCell className="px-6 py-4 whitespace-nowrap">
                               <div className="font-medium text-text-primary">{worker.name}</div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-text-secondary text-sm">
+                            </TableCell>
+                            <TableCell className="px-6 py-4 whitespace-nowrap text-text-secondary text-sm">
                               {worker.phone}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <motion.button
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
+                            </TableCell>
+                            <TableCell className="px-6 py-4 whitespace-nowrap">
+                              <Button
+                                variant="ghost"
+                                size="sm"
                                 onClick={() => handleJumpToProjects(worker.name)}
                                 className="inline-flex items-center px-3 py-1 bg-ios18-blue/10 text-ios18-blue rounded-full text-sm font-medium hover:bg-ios18-blue/20 transition-colors"
                               >
@@ -489,10 +456,10 @@ export const WorkerManagement: React.FC<WorkerManagementProps> = ({ className = 
                                 <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                                 </svg>
-                              </motion.button>
-                            </td>
+                              </Button>
+                            </TableCell>
                             {isAdmin && (
-                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                              <TableCell className="px-6 py-4 whitespace-nowrap text-right text-sm">
                                 <div className="flex justify-end space-x-2">
                                   <Button
                                     variant="ghost"
@@ -509,13 +476,13 @@ export const WorkerManagement: React.FC<WorkerManagementProps> = ({ className = 
                                     删除
                                   </Button>
                                 </div>
-                              </td>
+                              </TableCell>
                             )}
-                          </motion.tr>
+                          </TableRow>
                         ))}
                       </AnimatePresence>
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
               </motion.div>
             ))}
@@ -547,45 +514,76 @@ export const WorkerManagement: React.FC<WorkerManagementProps> = ({ className = 
                   </h3>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                  <Input
-                    label="姓名"
-                    value={formData.name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="请输入工人姓名"
-                    error={formErrors.name}
-                    required
-                  />
+                <Form onSubmit={async (formDataFromForm) => {
+                  // 从FormData中提取数据并更新状态
+                  const data = {
+                    name: formDataFromForm.get('name') as string || '',
+                    phone: formDataFromForm.get('phone') as string || '',
+                    departmentId: formDataFromForm.get('departmentId') as string || ''
+                  };
+                  
+                  setFormData(data);
+                  
+                  // 执行表单验证
+                  const errors: Record<string, string> = {};
+                  
+                  if (!data.name.trim()) {
+                    errors.name = '工人姓名不能为空';
+                  }
+                  
+                  if (!data.phone.trim()) {
+                    errors.phone = '手机号不能为空';
+                  } else if (!/^1[3-9]\d{9}$/.test(data.phone)) {
+                    errors.phone = '请输入有效的手机号';
+                  }
+                  
+                  setFormErrors(errors);
+                  
+                  if (Object.keys(errors).length > 0) {
+                    return;
+                  }
+                  
+                  // 提交数据
+                  await handleWorkerFormSubmit();
+                }} className="p-6 space-y-4">
+                  <FormField label="姓名" required error={formErrors.name}>
+                    <Input
+                      name="name"
+                      value={formData.name}
+                      onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="请输入工人姓名"
+                      required
+                    />
+                  </FormField>
 
-                  <Input
-                    label="手机号"
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                    placeholder="请输入手机号"
-                    error={formErrors.phone}
-                    required
-                  />
+                  <FormField label="手机号" required error={formErrors.phone}>
+                    <Input
+                      name="phone"
+                      type="tel"
+                      value={formData.phone}
+                      onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                      placeholder="请输入手机号"
+                      required
+                    />
+                  </FormField>
 
-                  <div>
-                    <label className="block text-sm font-medium text-text-primary mb-2">
-                      部门
-                    </label>
+                  <FormField label="部门">
                     <select
-                      value={formData.department}
-                      onChange={(e) => setFormData(prev => ({ ...prev, department: e.target.value }))}
-                      className="w-full px-4 py-3 rounded-ios-lg border border-macos15-separator bg-white transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ios18-blue focus:ring-opacity-50 focus:border-ios18-blue"
+                      name="departmentId"
+                      value={formData.departmentId}
+                      onChange={(e) => setFormData(prev => ({ ...prev, departmentId: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-ios18-blue focus:border-transparent"
                     >
-                      <option value="">选择部门</option>
+                      <option value="">请选择部门（可选）</option>
                       {departments.map(dept => (
-                        <option key={dept.id} value={dept.name}>
-                          {dept.name}
+                        <option key={dept.id} value={dept.id}>
+                          {dept.name} ({dept.workerCount}人)
                         </option>
                       ))}
                     </select>
-                  </div>
+                  </FormField>
 
-                  <div className="flex justify-end space-x-3 pt-4">
+                  <FormActions align="right">
                     <Button
                       type="button"
                       variant="ghost"
@@ -600,96 +598,8 @@ export const WorkerManagement: React.FC<WorkerManagementProps> = ({ className = 
                     >
                       {editingWorker ? '更新' : '创建'}
                     </Button>
-                  </div>
-                </form>
-              </Card>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* 部门管理模态框 */}
-      <AnimatePresence>
-        {showDepartmentModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-            onClick={() => setShowDepartmentModal(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="w-full max-w-md"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Card padding="none" glass>
-                <div className="px-6 py-4 border-b border-macos15-separator">
-                  <h3 className="text-lg font-bold text-text-primary">
-                    部门管理
-                  </h3>
-                </div>
-
-                <div className="p-6">
-                  {/* 部门列表 */}
-                  <div className="space-y-2 mb-4 max-h-60 overflow-auto">
-                    {departments.map(dept => (
-                      <div key={dept.id} className="flex items-center justify-between p-3 bg-macos15-control/20 rounded-lg">
-                        <span className="font-medium text-text-primary">{dept.name}</span>
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={async () => {
-                            if (confirm(`确定要删除部门 "${dept.name}" 吗？`)) {
-                              await deleteDepartment(dept.id, dept.name);
-                            }
-                          }}
-                        >
-                          删除
-                        </Button>
-                      </div>
-                    ))}
-                    {departments.length === 0 && (
-                      <p className="text-text-secondary text-center py-4">暂无部门</p>
-                    )}
-                  </div>
-
-                  {/* 添加新部门 */}
-                  <form onSubmit={async (e) => {
-                    e.preventDefault();
-                    if (departmentFormData.name.trim()) {
-                      const success = await createDepartment(departmentFormData.name);
-                      if (success) {
-                        setDepartmentFormData({ name: '' });
-                      }
-                    }
-                  }} className="space-y-4">
-                    <Input
-                      label="新部门名称"
-                      value={departmentFormData.name}
-                      onChange={(e) => setDepartmentFormData({ name: e.target.value })}
-                      placeholder="请输入部门名称"
-                    />
-                    <div className="flex justify-end space-x-3">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() => setShowDepartmentModal(false)}
-                      >
-                        关闭
-                      </Button>
-                      <Button
-                        type="submit"
-                        variant="primary"
-                        disabled={!departmentFormData.name.trim()}
-                      >
-                        添加部门
-                      </Button>
-                    </div>
-                  </form>
-                </div>
+                  </FormActions>
+                </Form>
               </Card>
             </motion.div>
           </motion.div>

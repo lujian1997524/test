@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
+import { Input, Select, Button, Modal, useDialog, Switch, Loading } from '@/components/ui';
 
 interface ThicknessSpec {
   id: number;
@@ -30,6 +31,9 @@ export const ThicknessSpecModal: React.FC<ThicknessSpecModalProps> = ({
   const [editingSpec, setEditingSpec] = useState<ThicknessSpec | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const { token } = useAuth();
+
+  // Dialog hook
+  const { confirm, DialogRenderer } = useDialog();
 
   // 新增/编辑表单状态
   const [formData, setFormData] = useState({
@@ -139,7 +143,8 @@ export const ThicknessSpecModal: React.FC<ThicknessSpecModalProps> = ({
 
   // 删除厚度规格
   const handleDelete = async (id: number) => {
-    if (!confirm('确定要删除这个厚度规格吗？\n注意：如果有项目正在使用此规格，删除将失败。')) return;
+    const confirmed = await confirm('确定要删除这个厚度规格吗？\n注意：如果有项目正在使用此规格，删除将失败。');
+    if (!confirmed) return;
     
     try {
       setLoading(true);
@@ -261,20 +266,23 @@ export const ThicknessSpecModal: React.FC<ThicknessSpecModalProps> = ({
                 板材厚度规格管理
               </h2>
               <div className="flex items-center space-x-3">
-                <button
+                <Button
                   onClick={startCreate}
-                  className="px-4 py-2 bg-gradient-to-r from-ios18-blue to-blue-600 text-white text-callout font-medium rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-sm hover:shadow-md active:scale-95"
+                  className="bg-gradient-to-r from-ios18-blue to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-sm hover:shadow-md active:scale-95"
+                  size="sm"
                 >
                   新增规格
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={onClose}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-all duration-200"
+                  variant="ghost"
+                  size="sm"
+                  className="p-2 hover:bg-gray-100 rounded-lg"
                 >
                   <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -296,66 +304,63 @@ export const ThicknessSpecModal: React.FC<ThicknessSpecModalProps> = ({
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
                     <label className="block text-callout font-medium text-gray-700 mb-1">厚度</label>
-                    <input
+                    <Input
                       type="text"
                       value={formData.thickness}
                       onChange={(e) => setFormData({ ...formData, thickness: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-callout focus:outline-none focus:ring-2 focus:ring-ios18-blue focus:border-transparent"
                       placeholder="如: 1.0"
                     />
                   </div>
                   <div>
                     <label className="block text-callout font-medium text-gray-700 mb-1">单位</label>
-                    <select
+                    <Select
                       value={formData.unit}
-                      onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-callout focus:outline-none focus:ring-2 focus:ring-ios18-blue focus:border-transparent"
-                    >
-                      <option value="mm">mm</option>
-                      <option value="cm">cm</option>
-                      <option value="inch">inch</option>
-                    </select>
+                      onChange={(value) => setFormData({ ...formData, unit: String(value) })}
+                      options={[
+                        { value: 'mm', label: 'mm' },
+                        { value: 'cm', label: 'cm' },
+                        { value: 'inch', label: 'inch' }
+                      ]}
+                    />
                   </div>
                   <div>
                     <label className="block text-callout font-medium text-gray-700 mb-1">材料类型</label>
-                    <select
+                    <Select
                       value={formData.materialType}
-                      onChange={(e) => setFormData({ ...formData, materialType: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-callout focus:outline-none focus:ring-2 focus:ring-ios18-blue focus:border-transparent"
-                    >
-                      <option value="钢板">钢板</option>
-                      <option value="不锈钢">不锈钢</option>
-                      <option value="铝板">铝板</option>
-                      <option value="铜板">铜板</option>
-                      <option value="其他">其他</option>
-                    </select>
+                      onChange={(value) => setFormData({ ...formData, materialType: String(value) })}
+                      options={[
+                        { value: '钢板', label: '钢板' },
+                        { value: '不锈钢', label: '不锈钢' },
+                        { value: '铝板', label: '铝板' },
+                        { value: '铜板', label: '铜板' },
+                        { value: '其他', label: '其他' }
+                      ]}
+                    />
                   </div>
                   <div className="flex items-end">
-                    <label className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
+                    <div className="flex items-center space-x-2">
+                      <Switch
                         checked={formData.isActive}
-                        onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                        className="rounded border-gray-300 text-ios18-blue focus:ring-ios18-blue"
+                        onChange={(checked) => setFormData({ ...formData, isActive: checked })}
                       />
                       <span className="text-callout font-medium text-gray-700">启用</span>
-                    </label>
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center space-x-3 mt-4">
-                  <button
+                  <Button
                     onClick={isCreating ? handleCreate : handleUpdate}
                     disabled={loading || !formData.thickness}
-                    className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white text-callout font-medium rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-sm hover:shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    variant="success"
                   >
                     {loading ? '保存中...' : (isCreating ? '创建' : '更新')}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     onClick={handleCancel}
-                    className="px-4 py-2 bg-gray-100 text-gray-700 text-callout font-medium rounded-lg hover:bg-gray-200 transition-all duration-200"
+                    variant="secondary"
                   >
                     取消
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
@@ -368,7 +373,7 @@ export const ThicknessSpecModal: React.FC<ThicknessSpecModalProps> = ({
               
               {loading && thicknessSpecs.length === 0 ? (
                 <div className="text-center py-8">
-                  <div className="text-callout text-gray-500">加载中...</div>
+                  <Loading size="md" text="加载中..." />
                 </div>
               ) : thicknessSpecs.length === 0 ? (
                 <div className="text-center py-8">
@@ -386,24 +391,28 @@ export const ThicknessSpecModal: React.FC<ThicknessSpecModalProps> = ({
                     >
                       <div className="flex items-center space-x-4">
                         <div className="flex flex-col space-y-1">
-                          <button
+                          <Button
                             onClick={() => moveSpec(spec.id, 'up')}
                             disabled={index === 0 || loading}
-                            className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                            variant="ghost"
+                            size="sm"
+                            className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed h-auto"
                           >
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
                             </svg>
-                          </button>
-                          <button
+                          </Button>
+                          <Button
                             onClick={() => moveSpec(spec.id, 'down')}
                             disabled={index === thicknessSpecs.length - 1 || loading}
-                            className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                            variant="ghost"
+                            size="sm"
+                            className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed h-auto"
                           >
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                             </svg>
-                          </button>
+                          </Button>
                         </div>
                         <div className="w-8 h-8 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center text-caption1 font-semibold text-gray-700">
                           {index + 1}
@@ -418,24 +427,26 @@ export const ThicknessSpecModal: React.FC<ThicknessSpecModalProps> = ({
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <button
+                        <Button
                           onClick={() => startEdit(spec)}
-                          className="p-2 hover:bg-blue-50 text-blue-600 rounded-lg transition-all duration-200"
-                          title="编辑"
+                          variant="ghost"
+                          size="sm"
+                          className="p-2 hover:bg-blue-50 text-blue-600 rounded-lg h-auto"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           onClick={() => handleDelete(spec.id)}
-                          className="p-2 hover:bg-red-50 text-red-600 rounded-lg transition-all duration-200"
-                          title="删除"
+                          variant="ghost"
+                          size="sm"
+                          className="p-2 hover:bg-red-50 text-red-600 rounded-lg h-auto"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
-                        </button>
+                        </Button>
                       </div>
                     </motion.div>
                   ))}
@@ -444,6 +455,7 @@ export const ThicknessSpecModal: React.FC<ThicknessSpecModalProps> = ({
             </div>
           </div>
         </motion.div>
+        <DialogRenderer />
       </motion.div>
     </AnimatePresence>
   );

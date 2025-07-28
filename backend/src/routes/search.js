@@ -20,45 +20,32 @@ const isTimeRelatedSearch = (searchTerm) => {
 
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { q, type = 'all', limit = 20 } = req.query;
+    const { q: query } = req.query;
     
-    if (!q || q.trim().length < 2) {
+    if (!query || query.trim().length < 2) {
       return res.json({
         success: true,
-        results: [],
-        total: 0,
-        message: '搜索关键词至少需要2个字符'
+        projects: [],
+        workers: [],
+        departments: [],
+        drawings: []
       });
     }
 
-    const searchTerm = q.trim();
-    const searchLimit = Math.min(parseInt(limit), 100);
-    let allResults = [];
+    const searchTerm = query.trim();
+    const searchPattern = `%${searchTerm}%`;
+    
+    // 导入模型
+    const { Project, Worker, Department, Drawing, User } = require('../models');
 
-    // 计算相关性得分的函数
-    const calculateRelevanceScore = (item, searchTerm) => {
-      let score = 0;
-      const term = searchTerm.toLowerCase();
-      
-      // 完全匹配得分最高
-      if (item.title && item.title.toLowerCase() === term) score += 100;
-      // 开头匹配得分较高
-      if (item.title && item.title.toLowerCase().startsWith(term)) score += 50;
-      // 包含匹配得分中等
-      if (item.title && item.title.toLowerCase().includes(term)) score += 25;
-      // 描述匹配得分较低
-      if (item.description && item.description.toLowerCase().includes(term)) score += 10;
-      
-      return score;
-    };
-
-    // 搜索项目
-    if (type === 'all' || type === 'projects') {
-      const projects = await Project.findAll({
+    // 并行搜索所有类型
+    const [projects, workers, departments, drawings] = await Promise.all([
+      // 搜索项目
+      Project.findAll({
         where: {
           [Op.or]: [
-            { name: { [Op.like]: `%${searchTerm}%` } },
-            { description: { [Op.like]: `%${searchTerm}%` } }
+            { name: { [Op.like]: searchPattern } },
+            { description: { [Op.like]: searchPattern } }
           ]
         },
         include: [
@@ -71,250 +58,143 @@ router.get('/', authenticate, async (req, res) => {
             model: Worker,
             as: 'assignedWorker',
             attributes: ['id', 'name', 'department']
-          },
-          {
-            model: Drawing,
-            as: 'drawings',
-            attributes: ['id', 'filename', 'description'],
-            required: false // LEFT JOIN，即使没有图纸也显示项目
           }
         ],
-        limit: searchLimit,
+        limit: 10,
         order: [['updatedAt', 'DESC']]
-      });
+      }),
 
-      projects.forEach(project => {
-        // 添加项目结果
-        allResults.push({
-          id: project.id.toString(),
-          type: 'projects',
-          title: project.name,
-          subtitle: `${project.status === 'active' ? '进行中' : project.status === 'completed' ? '已完成' : '待处理'} | 优先级: ${project.priority === 'high' ? '高' : project.priority === 'medium' ? '中' : '低'}`,
-          description: `负责人：${project.assignedWorker?.name || '未分配'} | 创建者：${project.creator?.name || ''} | 图纸数量：${project.drawings?.length || 0}`
-        });
-        
-        // 如果项目有关联图纸，也将相关图纸添加到结果中
-        if (project.drawings && project.drawings.length > 0) {
-          project.drawings.forEach(drawing => {
-            if (drawing.filename.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                (drawing.description && drawing.description.toLowerCase().includes(searchTerm.toLowerCase()))) {
-              allResults.push({
-                id: drawing.id.toString(),
-                type: 'drawings',
-                title: drawing.filename,
-                subtitle: `项目关联图纸 | ${project.name}`,
-                description: `项目：${project.name} | 描述：${drawing.description || 'CAD图纸'}`
-              });
-            }
-          });
-        }
-      });
-    }
-
-    // 搜索工人
-    if (type === 'all' || type === 'workers') {
-      const workers = await Worker.findAll({
+      // 搜索工人
+      Worker.findAll({
         where: {
-          [Op.or]: [
-            { name: { [Op.like]: `%${searchTerm}%` } },
-            { department: { [Op.like]: `%${searchTerm}%` } },
-            { position: { [Op.like]: `%${searchTerm}%` } },
-            { phone: { [Op.like]: `%${searchTerm}%` } }
+          [Op.and]: [
+            { status: 'active' },
+            {
+              [Op.or]: [
+                { name: { [Op.like]: searchPattern } },
+                { department: { [Op.like]: searchPattern } },
+                { position: { [Op.like]: searchPattern } },
+                { phone: { [Op.like]: searchPattern } },
+                { email: { [Op.like]: searchPattern } }
+              ]
+            }
           ]
         },
         include: [
           {
-            model: Project,
-            as: 'assignedProjects',
-            attributes: ['id', 'name', 'status', 'description'],
-            required: false, // LEFT JOIN，即使没有项目也显示工人
-            include: [
-              {
-                model: Drawing,
-                as: 'drawings',
-                attributes: ['id', 'filename', 'description'],
-                required: false // LEFT JOIN，即使没有图纸也显示项目
-              }
-            ]
+            model: Department,
+            as: 'departmentInfo',
+            attributes: ['id', 'name'],
+            required: false
           }
         ],
-        limit: searchLimit,
+        limit: 10,
         order: [['name', 'ASC']]
-      });
+      }),
 
-      workers.forEach(worker => {
-        const activeProjects = worker.assignedProjects?.filter(p => p.status !== 'completed') || [];
-        const completedProjects = worker.assignedProjects?.filter(p => p.status === 'completed') || [];
-        
-        // 添加工人结果
-        allResults.push({
-          id: worker.id.toString(),
-          type: 'workers',
-          title: worker.name,
-          subtitle: worker.position || '员工',
-          description: `部门：${worker.department || '未分配'} | 电话：${worker.phone || '未填写'} | 活跃项目：${activeProjects.length}个 | 完成项目：${completedProjects.length}个`
-        });
+      // 搜索部门
+      Department.findAll({
+        where: {
+          [Op.and]: [
+            { isActive: true },
+            { name: { [Op.like]: searchPattern } }
+          ]
+        },
+        limit: 8,
+        order: [['sortOrder', 'ASC'], ['name', 'ASC']]
+      }),
 
-        // 添加工人分配的项目到搜索结果
-        if (worker.assignedProjects && worker.assignedProjects.length > 0) {
-          worker.assignedProjects.forEach(project => {
-            allResults.push({
-              id: project.id.toString(),
-              type: 'projects',
-              title: project.name,
-              subtitle: `${worker.name}负责的项目 | ${project.status === 'active' ? '进行中' : project.status === 'completed' ? '已完成' : '待处理'}`,
-              description: `负责人：${worker.name} | 描述：${project.description || '无描述'} | 图纸数量：${project.drawings?.length || 0}`
-            });
-
-            // 如果项目有关联图纸，也将图纸添加到结果中
-            if (project.drawings && project.drawings.length > 0) {
-              project.drawings.forEach(drawing => {
-                allResults.push({
-                  id: drawing.id.toString(),
-                  type: 'drawings',
-                  title: drawing.filename,
-                  subtitle: `${worker.name}负责项目的图纸 | ${project.name}`,
-                  description: `项目：${project.name} | 负责人：${worker.name} | 描述：${drawing.description || 'CAD图纸'}`
-                });
-              });
-            }
-          });
-        }
-      });
-    }
-
-    // 搜索图纸
-    if (type === 'all' || type === 'drawings') {
-      const drawings = await Drawing.findAll({
+      // 搜索图纸
+      Drawing.findAll({
         where: {
           [Op.or]: [
-            { filename: { [Op.like]: `%${searchTerm}%` } },
-            { description: { [Op.like]: `%${searchTerm}%` } }
+            { filename: { [Op.like]: searchPattern } },
+            { originalFilename: { [Op.like]: searchPattern } }
           ]
         },
         include: [
-          {
-            model: Project,
-            as: 'project',
-            attributes: ['id', 'name']
-          },
           {
             model: User,
             as: 'uploader',
             attributes: ['id', 'name']
           }
         ],
-        limit: searchLimit,
-        order: [['createdAt', 'DESC']]
-      });
+        limit: 8,
+        order: [['uploadTime', 'DESC']]
+      })
+    ]);
 
-      drawings.forEach(drawing => {
-        allResults.push({
-          id: drawing.id.toString(),
-          type: 'drawings',
-          title: drawing.filename,
-          subtitle: `版本 ${drawing.version || '1.0'} | ${drawing.fileSize ? `${(drawing.fileSize / 1024).toFixed(1)}KB` : 'CAD图纸'}`,
-          description: `项目：${drawing.project?.name || '通用图纸'} | 上传者：${drawing.uploader?.name || ''}`
-        });
-      });
-    }
+    // 格式化搜索结果
+    const formatProjects = projects.map(project => ({
+      id: project.id,
+      name: project.name,
+      description: project.description,
+      status: project.status,
+      priority: project.priority,
+      assignedWorker: project.assignedWorker?.name || null,
+      department: project.assignedWorker?.department || null,
+      createdAt: project.createdAt,
+      updatedAt: project.updatedAt
+    }));
 
-    // 搜索板材/厚度规格
-    if (type === 'all' || type === 'materials') {
-      const thicknessSpecs = await ThicknessSpec.findAll({
-        where: {
-          [Op.and]: [
-            { isActive: true },
-            {
-              [Op.or]: [
-                { thickness: { [Op.like]: `%${searchTerm}%` } },
-                { materialType: { [Op.like]: `%${searchTerm}%` } },
-                { unit: { [Op.like]: `%${searchTerm}%` } }
-              ]
-            }
-          ]
-        },
-        limit: searchLimit,
-        order: [['sortOrder', 'ASC']]
-      });
+    const formatWorkers = workers.map(worker => ({
+      id: worker.id,
+      name: worker.name,
+      department: worker.departmentInfo?.name || worker.department || '未分配',
+      position: worker.position,
+      phone: worker.phone,
+      email: worker.email,
+      status: worker.status
+    }));
 
-      thicknessSpecs.forEach(spec => {
-        allResults.push({
-          id: spec.id.toString(),
-          type: 'materials',
-          title: `${spec.thickness}${spec.unit} ${spec.materialType}`,
-          subtitle: '板材规格',
-          description: `厚度：${spec.thickness}${spec.unit} | 材质：${spec.materialType} | 状态：可用`
-        });
-      });
-    }
-
-    // 搜索时间相关 - 只有当搜索词包含时间相关关键词时才触发
-    if ((type === 'all' || type === 'time') && isTimeRelatedSearch(searchTerm)) {
-      const recentProjects = await Project.findAll({
-        where: {
-          [Op.and]: [
-            {
-              createdAt: {
-                [Op.gte]: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // 最近30天
-              }
-            },
-            {
-              [Op.or]: [
-                { name: { [Op.like]: `%${searchTerm}%` } },
-                { description: { [Op.like]: `%${searchTerm}%` } }
-              ]
-            }
-          ]
-        },
-        include: [
-          {
-            model: Worker,
-            as: 'assignedWorker',
-            attributes: ['id', 'name']
+    const formatDepartments = await Promise.all(
+      departments.map(async (dept) => {
+        // 计算部门下的工人数量
+        const workerCount = await Worker.count({
+          where: { 
+            [Op.or]: [
+              { departmentId: dept.id },
+              { department: dept.name }
+            ],
+            status: 'active'
           }
-        ],
-        limit: Math.ceil(searchLimit / 2),
-        order: [['createdAt', 'DESC']]
-      });
-
-      recentProjects.forEach(project => {
-        const createdDate = new Date(project.createdAt).toLocaleDateString('zh-CN');
-        allResults.push({
-          id: project.id.toString(),
-          type: 'time',
-          title: `${createdDate} - ${project.name}`,
-          subtitle: '最近项目',
-          description: `创建时间：${createdDate} | 负责人：${project.assignedWorker?.name || '未分配'}`
         });
-      });
-    }
+        
+        return {
+          id: dept.id,
+          name: dept.name,
+          description: dept.description,
+          meta: `${workerCount}`
+        };
+      })
+    );
 
-    // 按相关性排序
-    const sortedResults = allResults.sort((a, b) => {
-      const aScore = calculateRelevanceScore(a, searchTerm);
-      const bScore = calculateRelevanceScore(b, searchTerm);
-      return bScore - aScore;
-    });
-
-    // 限制结果数量
-    const limitedResults = sortedResults.slice(0, searchLimit);
+    const formatDrawings = drawings.map(drawing => ({
+      id: drawing.id,
+      name: drawing.originalFilename || drawing.filename,
+      filename: drawing.filename,
+      description: `上传于 ${drawing.uploadTime?.toLocaleDateString?.() || '未知时间'}`,
+      category: drawing.isCommonPart ? 'common-parts' : 'project-drawings',
+      uploader: drawing.uploader?.name || '未知',
+      uploadedAt: drawing.uploadTime
+    }));
 
     res.json({
       success: true,
-      results: limitedResults,
-      total: limitedResults.length,
       query: searchTerm,
-      searchType: type,
-      searchTime: new Date().toISOString()
+      projects: formatProjects,
+      workers: formatWorkers,
+      departments: formatDepartments,
+      drawings: formatDrawings,
+      totalCount: formatProjects.length + formatWorkers.length + formatDepartments.length + formatDrawings.length
     });
 
   } catch (error) {
-    console.error('搜索失败:', error);
+    console.error('搜索错误:', error);
     res.status(500).json({
       success: false,
-      error: '搜索失败',
-      message: error.message
+      message: '搜索失败',
+      error: error.message
     });
   }
 });

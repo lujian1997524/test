@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
+import { Button, Input, Select, Form, FormField, FormActions } from '@/components/ui';
+import { XMarkIcon } from '@heroicons/react/24/outline';
 
 interface Worker {
   id: number;
@@ -157,122 +159,108 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
               <h2 className="text-lg font-semibold text-text-primary">
                 {project ? '编辑项目' : '新建项目'}
               </h2>
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={onClose}
-                className="p-2 rounded-lg hover:bg-gray-100 text-text-tertiary transition-colors"
+                className="p-2"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+                <XMarkIcon className="w-4 h-4" />
+              </Button>
             </div>
           </div>
 
           {/* 表单内容 */}
-          <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
-            {/* 项目名称 */}
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">
-                项目名称 *
-              </label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => handleInputChange('name', e.target.value)}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                  formErrors.name ? 'border-red-300' : 'border-gray-200'
-                }`}
-                placeholder="请输入项目名称"
-              />
-              {formErrors.name && (
-                <p className="mt-1 text-sm text-red-600">{formErrors.name}</p>
-              )}
-            </div>
+          <div className="px-6 py-4">
+            <form onSubmit={handleSubmit}>
+              {/* 项目名称 */}
+              <FormField label="项目名称" required error={formErrors.name}>
+                <Input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => handleInputChange('name', e.target.value)}
+                  placeholder="请输入项目名称"
+                  error={formErrors.name}
+                />
+              </FormField>
 
-            {/* 项目描述 */}
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">
-                项目描述
-              </label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => handleInputChange('description', e.target.value)}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors resize-none"
-                placeholder="请输入项目描述（可选）"
-              />
-            </div>
+              {/* 项目描述 */}
+              <FormField label="项目描述">
+                <Input
+                  multiline
+                  rows={3}
+                  value={formData.description}
+                  onChange={(e) => handleInputChange('description', e.target.value)}
+                  placeholder="请输入项目描述（可选）"
+                />
+              </FormField>
 
-            {/* 状态和优先级 */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">
-                  项目状态
-                </label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => handleInputChange('status', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                >
-                  <option value="pending">待处理</option>
-                  <option value="in_progress">进行中</option>
-                  <option value="completed">已完成</option>
-                </select>
+              {/* 状态和优先级 */}
+              <div className="grid grid-cols-2 gap-4">
+                <FormField label="项目状态">
+                  <Select
+                    value={formData.status}
+                    onChange={(value) => handleInputChange('status', value)}
+                    options={[
+                      { value: 'pending', label: '待处理' },
+                      { value: 'in_progress', label: '进行中' },
+                      { value: 'completed', label: '已完成' }
+                    ]}
+                  />
+                </FormField>
+
+                <FormField label="优先级">
+                  <Select
+                    value={formData.priority}
+                    onChange={(value) => handleInputChange('priority', value)}
+                    options={[
+                      { value: 'low', label: '低' },
+                      { value: 'medium', label: '中' },
+                      { value: 'high', label: '高' },
+                      { value: 'urgent', label: '紧急' }
+                    ]}
+                  />
+                </FormField>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">
-                  优先级
-                </label>
-                <select
-                  value={formData.priority}
-                  onChange={(e) => handleInputChange('priority', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                >
-                  <option value="low">低</option>
-                  <option value="medium">中</option>
-                  <option value="high">高</option>
-                  <option value="urgent">紧急</option>
-                </select>
-              </div>
-            </div>
-
-            {/* 分配工人 */}
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">
-                分配工人
-              </label>
-              <select
-                value={formData.assignedWorkerId || ''}
-                onChange={(e) => handleInputChange('assignedWorkerId', e.target.value ? parseInt(e.target.value) : null)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-              >
-                <option value="">未分配</option>
-                {workers.map((worker) => (
-                  <option key={worker.id} value={worker.id}>
-                    {worker.name} - {worker.department}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </form>
+              {/* 分配工人 */}
+              <FormField label="分配工人">
+                <Select
+                  value={formData.assignedWorkerId || ''}
+                  onChange={(value) => handleInputChange('assignedWorkerId', value ? parseInt(value as string) : null)}
+                  options={[
+                    { value: '', label: '未分配' },
+                    ...workers.map((worker) => ({
+                      value: worker.id.toString(),
+                      label: `${worker.name} - ${worker.department}`
+                    }))
+                  ]}
+                  clearable
+                />
+              </FormField>
+            </form>
+          </div>
 
           {/* 底部按钮 */}
-          <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-end space-x-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-text-secondary hover:text-text-primary transition-colors"
-            >
-              取消
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={loading}
-              className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? '保存中...' : project ? '保存修改' : '创建项目'}
-            </button>
+          <div className="px-6 py-4 border-t border-gray-200">
+            <FormActions>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={onClose}
+              >
+                取消
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => handleSubmit({ preventDefault: () => {} } as React.FormEvent)}
+                loading={loading}
+                disabled={loading}
+              >
+                {project ? '保存修改' : '创建项目'}
+              </Button>
+            </FormActions>
           </div>
         </motion.div>
       </div>

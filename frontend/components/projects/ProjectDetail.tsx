@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjectStore, type ProjectState } from '@/stores';
-import { StatusToggle, CADPreview, DxfPreviewModal, Card, Input } from '@/components/ui';
+import { StatusToggle, CADPreview, DxfPreviewModal, Card, Input, Loading } from '@/components/ui';
 import type { StatusType } from '@/components/ui';
 import cadFileHandler from '@/utils/cadFileHandler';
 import { 
@@ -425,8 +425,7 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
     return (
       <div className={`bg-white/80 backdrop-blur-xl rounded-2xl border border-gray-200 shadow-lg ${className}`}>
         <div className="p-8 text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-500">加载项目详情中...</p>
+          <Loading size="lg" text="加载项目详情中..." />
         </div>
       </div>
     );

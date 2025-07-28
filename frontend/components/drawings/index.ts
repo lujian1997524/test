@@ -16,3 +16,5 @@ export type { DrawingUploadProps } from './DrawingUpload';
 
 export { DrawingSearch } from './DrawingSearch';
 export type { DrawingSearchProps, DrawingSearchFilters } from './DrawingSearch';
+
+export { DrawingsSidebar } from './DrawingsSidebar';

@@ -78,11 +78,17 @@ router.get('/', authenticate, async (req, res) => {
       page = 1,
       limit = 20,
       sortBy = 'createdAt',
-      sortOrder = 'DESC'
+      sortOrder = 'DESC',
+      includeArchived = 'false'
     } = req.query;
 
     // 构建查询条件
     let whereClause = {};
+    
+    // 默认情况下排除已归档的图纸，除非明确要求包含或者分类是archived
+    if (category !== 'archived' && includeArchived !== 'true') {
+      whereClause.status = { [Op.ne]: '已归档' };
+    }
     
     // 分类筛选
     if (category && category !== 'all') {

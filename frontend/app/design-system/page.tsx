@@ -1,11 +1,15 @@
 'use client'
 
 import React, { useState } from 'react'
-import { Button, Card, Input, StatusIndicator, StatusToggle, Switch, Badge, Alert, Avatar, Skeleton, SkeletonCard, SkeletonList, ProgressBar, ProgressWithSteps, Modal, ConfirmModal, Dropdown, TabBar, Tabs, Slider, RangeSlider, Toast, ToastContainer, useToast, Tooltip, Popover, DatePicker, SearchBar, Empty, EmptyData, EmptySearch, Loading, LoadingSpinner, LoadingDots, LoadingOverlay, Stepper, Breadcrumb, Tree, Rating, Timeline, Pagination } from '../../components/ui'
+import { Button, Card, Input, StatusIndicator, StatusToggle, Switch, Badge, Alert, Avatar, Skeleton, SkeletonCard, SkeletonList, ProgressBar, ProgressWithSteps, Modal, ConfirmModal, Dropdown, TabBar, Tabs, Slider, RangeSlider, Toast, ToastContainer, useToast, Tooltip, Popover, DatePicker, SearchBar, Empty, EmptyData, EmptySearch, Loading, LoadingSpinner, LoadingDots, LoadingOverlay, Stepper, Breadcrumb, Tree, Rating, Timeline, Pagination, Table, TableHeader, TableBody, TableRow, TableCell, TableContainer, SortableTableRow, Form, FormGroup, FormField, FormActions, FormContainer, Select, List, ListItem, ListGroup, ListAction, ListContainer, Navigation, NavigationItem, NavigationGroup, NavigationDivider, TabNavigation } from '../../components/ui'
+import { useNotification, NotificationContainer as NotificationManager } from '../../components/ui/Notification'
+import { Dialog, useDialog } from '../../components/ui/Dialog'
 import { SearchBox } from '../../components/ui/SearchBox'
 import type { SearchType, SearchResult } from '../../components/ui/SearchBox'
 import { MainLayout } from '../../components/layout'
 import type { StatusType, DropdownOption, TabItem, SearchSuggestion, StepperStep, BreadcrumbItem, TreeNode, TimelineItem } from '../../components/ui'
+import { UnifiedWorkersSidebar } from './UnifiedWorkersSidebar'
+import { AllSidebarsDemo } from './AllSidebarsDemo'
 
 export default function DesignSystemPage() {
   const [inputValue, setInputValue] = useState('')
@@ -30,6 +34,13 @@ export default function DesignSystemPage() {
   const [selectedTreeKeys, setSelectedTreeKeys] = useState<string[]>([])
   const [ratingValue, setRatingValue] = useState(0)
   const [paginationCurrent, setPaginationCurrent] = useState(1)
+
+  // 新增的通知和对话框Hook
+  const notification = useNotification()
+  const dialog = useDialog()
+
+  // WorkersSidebar状态
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('all')
 
   // 搜索框组件状态
   const [searchBoxType, setSearchBoxType] = useState<SearchType>('all')
@@ -237,6 +248,8 @@ export default function DesignSystemPage() {
     { id: 'progress', label: '进度条', icon: '📊' },
     { id: 'skeleton', label: '骨架屏', icon: '💀' },
     { id: 'toast', label: '消息提示', icon: '🍞' },
+    { id: 'notification', label: '弹窗通知', icon: '🔔' },
+    { id: 'dialog', label: '替代弹窗', icon: '💬' },
     { id: 'modal', label: '模态框', icon: '🪟' },
     { id: 'dropdown', label: '下拉选择', icon: '📋' },
     { id: 'tabs', label: '标签页', icon: '📑' },
@@ -253,7 +266,12 @@ export default function DesignSystemPage() {
     { id: 'tree', label: '树形组件', icon: '🌳' },
     { id: 'rating', label: '评分组件', icon: '⭐' },
     { id: 'timeline', label: '时间轴', icon: '⏰' },
-    { id: 'pagination', label: '分页组件', icon: '📄' }
+    { id: 'pagination', label: '分页组件', icon: '📄' },
+    { id: 'table', label: '表格组件', icon: '📋' },
+    { id: 'form', label: '表单组件', icon: '📝' },
+    { id: 'select', label: '选择器', icon: '🎯' },
+    { id: 'list', label: '列表组件', icon: '📃' },
+    { id: 'navigation', label: '导航组件', icon: '🧭' }
   ]
 
   // 快捷导航滚动函数
@@ -771,6 +789,257 @@ export default function DesignSystemPage() {
           </Card>
         </div>
 
+        {/* Notification 弹窗通知组件 */}
+        <div id="notification">
+          <Card>
+          <h2 className="text-xl font-bold text-text-primary mb-4">弹窗通知组件</h2>
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-medium text-text-primary mb-3">基础通知</h3>
+              <div className="flex flex-wrap gap-3">
+                <Button onClick={() => { 
+                  notification.success('操作已成功完成！') 
+                }}>
+                  成功通知
+                </Button>
+                <Button onClick={() => { 
+                  notification.error('发生了一个错误，请重试。') 
+                }}>
+                  错误通知
+                </Button>
+                <Button onClick={() => { 
+                  notification.warning('请注意这个重要信息。') 
+                }}>
+                  警告通知
+                </Button>
+                <Button onClick={() => { 
+                  notification.info('这是一条信息提示。') 
+                }}>
+                  信息通知
+                </Button>
+              </div>
+            </div>
+            
+            <div>
+              <h3 className="text-lg font-medium text-text-primary mb-3">带标题和操作的通知</h3>
+              <div className="flex flex-wrap gap-3">
+                <Button onClick={() => notification.addNotification({
+                  type: 'success',
+                  title: '文件上传成功',
+                  message: '您的文件已成功上传到服务器。',
+                  action: <Button size="sm" variant="ghost">查看详情</Button>
+                })}>
+                  带操作按钮
+                </Button>
+                <Button onClick={() => notification.addNotification({
+                  type: 'warning',
+                  title: '存储空间不足',
+                  message: '您的存储空间只剩下 100MB，建议清理不必要的文件。',
+                  persistent: true,
+                  action: <Button size="sm" variant="secondary">立即清理</Button>
+                })}>
+                  持久通知
+                </Button>
+                <Button onClick={() => notification.addNotification({
+                  type: 'info',
+                  title: '系统维护通知',
+                  message: '系统将在今晚 23:00 进行例行维护，维护期间服务可能会短暂中断。',
+                  duration: 10000
+                })}>
+                  长时间显示
+                </Button>
+              </div>
+            </div>
+            
+            <div>
+              <h3 className="text-lg font-medium text-text-primary mb-3">批量操作</h3>
+              <div className="flex flex-wrap gap-3">
+                <Button onClick={() => {
+                  for (let i = 1; i <= 3; i++) {
+                    setTimeout(() => {
+                      notification.addNotification({
+                        type: i % 2 === 0 ? 'success' : 'info',
+                        title: `通知 ${i}`,
+                        message: `这是第 ${i} 条通知消息。`,
+                        duration: 3000 + i * 1000
+                      })
+                    }, i * 500)
+                  }
+                }}>
+                  批量通知
+                </Button>
+                <Button onClick={notification.clearAll} variant="secondary">
+                  清除所有
+                </Button>
+              </div>
+            </div>
+            
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h4 className="font-medium mb-2">特性说明</h4>
+              <ul className="text-sm text-gray-600 space-y-1">
+                <li>• 支持四种类型：成功、错误、警告、信息</li>
+                <li>• 可设置标题、自定义图标和操作按钮</li>
+                <li>• 支持自动消失或持久显示</li>
+                <li>• 优雅的动画效果，支持点击关闭</li>
+                <li>• 支持位置配置（顶部/底部 + 左/中/右）</li>
+              </ul>
+            </div>
+          </div>
+          </Card>
+        </div>
+
+        {/* Dialog 替代弹窗组件 */}
+        <div id="dialog">
+          <Card>
+          <h2 className="text-xl font-bold text-text-primary mb-4">替代浏览器弹窗组件</h2>
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-medium text-text-primary mb-3">基础对话框</h3>
+              <div className="flex flex-wrap gap-3">
+                <Button onClick={() => { 
+                  dialog.alert('这是一个警告对话框，用于显示重要信息。') 
+                }}>
+                  警告对话框
+                </Button>
+                <Button onClick={async () => {
+                  const result = await dialog.confirm('您确定要删除这个项目吗？此操作不可撤销。')
+                  notification.info(`您选择了：${result ? '确认' : '取消'}`)
+                }}>
+                  确认对话框
+                </Button>
+                <Button onClick={async () => {
+                  const result = await dialog.prompt('请输入您的姓名：', { placeholder: '请输入姓名' })
+                  if (result) {
+                    notification.success(`您好，${result}！`)
+                  }
+                }}>
+                  输入对话框
+                </Button>
+              </div>
+            </div>
+            
+            <div>
+              <h3 className="text-lg font-medium text-text-primary mb-3">不同变体</h3>
+              <div className="flex flex-wrap gap-3">
+                <Button onClick={() => { 
+                  dialog.success('操作已成功完成！所有数据已保存。') 
+                }}>
+                  成功对话框
+                </Button>
+                <Button onClick={() => { 
+                  dialog.error('发生错误！无法连接到服务器，请检查网络连接。') 
+                }}>
+                  错误对话框
+                </Button>
+                <Button onClick={() => { 
+                  dialog.warning('警告：这个操作可能会影响其他用户的数据。') 
+                }}>
+                  警告对话框
+                </Button>
+                <Button onClick={() => { 
+                  dialog.info('系统将在 5 分钟后进行维护更新。') 
+                }}>
+                  信息对话框
+                </Button>
+              </div>
+            </div>
+            
+            <div>
+              <h3 className="text-lg font-medium text-text-primary mb-3">自定义对话框</h3>
+              <div className="flex flex-wrap gap-3">
+                <Button onClick={async () => {
+                  const result = await dialog.openDialog({
+                    type: 'confirm',
+                    variant: 'warning',
+                    title: '重要操作确认',
+                    message: '您即将执行一个不可逆的操作。这将删除所有相关数据，请谨慎考虑。',
+                    confirmText: '我已了解风险，继续',
+                    cancelText: '取消操作',
+                    width: 500
+                  })
+                  notification.info(`操作结果：${result ? '已确认' : '已取消'}`)
+                }}>
+                  自定义确认
+                </Button>
+                <Button onClick={async () => {
+                  const result = await dialog.openDialog({
+                    type: 'prompt',
+                    title: '创建新项目',
+                    message: '请输入项目名称（最多 20 个字符）：',
+                    placeholder: '项目名称',
+                    maxLength: 20,
+                    confirmText: '创建',
+                    cancelText: '取消'
+                  })
+                  if (result) {
+                    notification.success(`项目 "${result}" 创建成功！`)
+                  }
+                }}>
+                  限制长度输入
+                </Button>
+                <Button onClick={async () => {
+                  await dialog.openDialog({
+                    type: 'default',
+                    title: '系统信息',
+                    width: 600,
+                    buttons: [
+                      {
+                        text: '查看日志',
+                        variant: 'secondary',
+                        onClick: () => {
+                          notification.info('正在打开系统日志...')
+                        }
+                      },
+                      {
+                        text: '导出报告',
+                        variant: 'primary',
+                        onClick: () => {
+                          notification.success('报告导出成功！')
+                        }
+                      },
+                      {
+                        text: '关闭',
+                        variant: 'ghost'
+                      }
+                    ],
+                    message: (
+                      <div className="space-y-4">
+                        <div className="bg-gray-50 p-4 rounded-lg">
+                          <h4 className="font-medium mb-2">系统状态</h4>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>CPU 使用率: 45%</div>
+                            <div>内存使用率: 62%</div>
+                            <div>磁盘空间: 78%</div>
+                            <div>网络延迟: 23ms</div>
+                          </div>
+                        </div>
+                        <p className="text-gray-600">
+                          系统运行正常，所有服务状态良好。
+                        </p>
+                      </div>
+                    )
+                  })
+                }}>
+                  多按钮对话框
+                </Button>
+              </div>
+            </div>
+            
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h4 className="font-medium mb-2">替代浏览器弹窗的优势</h4>
+              <ul className="text-sm text-gray-600 space-y-1">
+                <li>• 统一的视觉风格，符合应用设计语言</li>
+                <li>• 支持复杂内容和自定义按钮</li>
+                <li>• 更好的移动端适配和响应式设计</li>
+                <li>• 支持键盘操作（ESC、Enter）</li>
+                <li>• 可控制的关闭行为和加载状态</li>
+                <li>• 支持异步操作和错误处理</li>
+              </ul>
+            </div>
+          </div>
+          </Card>
+        </div>
+
         {/* Modal组件 */}
         <div id="modal">
           <Card>
@@ -972,16 +1241,16 @@ export default function DesignSystemPage() {
             <div>
               <h3 className="text-lg font-medium text-text-primary mb-3">基础提示</h3>
               <div className="flex flex-wrap gap-4">
-                <Tooltip content="这是一个顶部提示" placement="top">
+                <Tooltip content="这是一个顶部提示" placement="top" delay={0}>
                   <Button>顶部提示</Button>
                 </Tooltip>
-                <Tooltip content="这是一个底部提示" placement="bottom">
+                <Tooltip content="这是一个底部提示" placement="bottom" delay={0}>
                   <Button>底部提示</Button>
                 </Tooltip>
-                <Tooltip content="这是一个左侧提示" placement="left">
+                <Tooltip content="这是一个左侧提示" placement="left" delay={0}>
                   <Button>左侧提示</Button>
                 </Tooltip>
-                <Tooltip content="这是一个右侧提示" placement="right">
+                <Tooltip content="这是一个右侧提示" placement="right" delay={0}>
                   <Button>右侧提示</Button>
                 </Tooltip>
               </div>
@@ -990,13 +1259,13 @@ export default function DesignSystemPage() {
             <div>
               <h3 className="text-lg font-medium text-text-primary mb-3">触发方式</h3>
               <div className="flex flex-wrap gap-4">
-                <Tooltip content="鼠标悬停触发" trigger="hover">
+                <Tooltip content="鼠标悬停触发" trigger="hover" delay={0}>
                   <Button variant="secondary">悬停触发</Button>
                 </Tooltip>
-                <Tooltip content="点击触发" trigger="click">
+                <Tooltip content="点击触发" trigger="click" delay={0}>
                   <Button variant="secondary">点击触发</Button>
                 </Tooltip>
-                <Tooltip content="焦点触发" trigger="focus">
+                <Tooltip content="焦点触发" trigger="focus" delay={0}>
                   <Button variant="secondary">焦点触发</Button>
                 </Tooltip>
               </div>
@@ -1619,6 +1888,435 @@ export default function DesignSystemPage() {
           </div>
           </Card>
         </div>
+
+        {/* Table组件 */}
+        <div id="table">
+          <Card>
+          <h2 className="text-xl font-bold text-text-primary mb-4">表格组件</h2>
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-medium text-text-primary mb-3">基础表格</h3>
+              <TableContainer 
+                title="用户列表" 
+                description="显示系统中的所有用户信息"
+              >
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableCell type="header">姓名</TableCell>
+                      <TableCell type="header">邮箱</TableCell>
+                      <TableCell type="header">角色</TableCell>
+                      <TableCell type="header" align="center">状态</TableCell>
+                      <TableCell type="header" align="right">操作</TableCell>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell>高春强</TableCell>
+                      <TableCell>gao@example.com</TableCell>
+                      <TableCell>管理员</TableCell>
+                      <TableCell align="center">
+                        <Badge variant="success">活跃</Badge>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Button size="sm" variant="ghost">编辑</Button>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell>杨伟</TableCell>
+                      <TableCell>yang@example.com</TableCell>
+                      <TableCell>操作员</TableCell>
+                      <TableCell align="center">
+                        <Badge variant="warning">离线</Badge>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Button size="sm" variant="ghost">编辑</Button>
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-medium text-text-primary mb-3">可排序表格</h3>
+              <TableContainer 
+                title="项目状态" 
+                description="支持拖拽排序的项目列表"
+              >
+                <Table 
+                  sortable
+                  sortableItems={[1, 2, 3]}
+                  onDragEnd={(event) => {
+                    console.log('拖拽排序:', event)
+                  }}
+                >
+                  <TableHeader>
+                    <TableRow>
+                      <TableCell type="header">排序</TableCell>
+                      <TableCell type="header">项目名称</TableCell>
+                      <TableCell type="header">状态</TableCell>
+                      <TableCell type="header" align="center">进度</TableCell>
+                      <TableCell type="header" align="right">操作</TableCell>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody sortable sortableItems={[1, 2, 3]}>
+                    <SortableTableRow id={1} dragHandle={{ title: '拖拽排序项目' }}>
+                      <TableCell>项目A</TableCell>
+                      <TableCell>
+                        <StatusToggle status="in_progress" onChange={() => {}} />
+                      </TableCell>
+                      <TableCell align="center">
+                        <ProgressBar value={75} />
+                      </TableCell>
+                      <TableCell align="right">
+                        <Button size="sm" variant="ghost">查看</Button>
+                      </TableCell>
+                    </SortableTableRow>
+                    <SortableTableRow id={2} dragHandle={{ title: '拖拽排序项目' }}>
+                      <TableCell>项目B</TableCell>
+                      <TableCell>
+                        <StatusToggle status="completed" onChange={() => {}} />
+                      </TableCell>
+                      <TableCell align="center">
+                        <ProgressBar value={100} />
+                      </TableCell>
+                      <TableCell align="right">
+                        <Button size="sm" variant="ghost">查看</Button>
+                      </TableCell>
+                    </SortableTableRow>
+                    <SortableTableRow id={3} dragHandle={{ title: '拖拽排序项目' }}>
+                      <TableCell>项目C</TableCell>
+                      <TableCell>
+                        <StatusToggle status="pending" onChange={() => {}} />
+                      </TableCell>
+                      <TableCell align="center">
+                        <ProgressBar value={25} />
+                      </TableCell>
+                      <TableCell align="right">
+                        <Button size="sm" variant="ghost">查看</Button>
+                      </TableCell>
+                    </SortableTableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-medium text-text-primary mb-3">空状态表格</h3>
+              <TableContainer 
+                title="空数据表格" 
+                description="演示表格空状态显示"
+                showEmptyState
+                emptyState={{
+                  title: "暂无数据",
+                  description: "还没有任何记录，点击上方按钮创建第一条记录"
+                }}
+              />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-medium text-text-primary mb-3">加载状态表格</h3>
+              <TableContainer 
+                title="加载中的表格" 
+                description="演示表格加载状态"
+              >
+                <Table loading loadingText="正在加载数据...">
+                  <TableHeader>
+                    <TableRow>
+                      <TableCell type="header">名称</TableCell>
+                      <TableCell type="header">状态</TableCell>
+                      <TableCell type="header">创建时间</TableCell>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell><Skeleton width="80px" /></TableCell>
+                      <TableCell><Skeleton width="60px" /></TableCell>
+                      <TableCell><Skeleton width="120px" /></TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell><Skeleton width="90px" /></TableCell>
+                      <TableCell><Skeleton width="60px" /></TableCell>
+                      <TableCell><Skeleton width="120px" /></TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </div>
+          </div>
+          </Card>
+        </div>
+
+        {/* Form组件 */}
+        <div id="form">
+          <Card>
+          <h2 className="text-xl font-bold text-text-primary mb-4">表单组件</h2>
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-medium text-text-primary mb-3">基础表单</h3>
+              <FormContainer 
+                title="用户注册" 
+                description="请填写以下信息创建账户"
+                maxWidth="md"
+              >
+                <Form layout="vertical">
+                  <FormGroup>
+                    <FormField label="用户名" required>
+                      <Input placeholder="请输入用户名" />
+                    </FormField>
+                    <FormField label="邮箱" required>
+                      <Input type="email" placeholder="请输入邮箱地址" />
+                    </FormField>
+                    <FormField label="密码" required>
+                      <Input type="password" placeholder="请输入密码" />
+                    </FormField>
+                  </FormGroup>
+                  
+                  <FormActions>
+                    <Button variant="secondary">取消</Button>
+                    <Button type="submit">注册</Button>
+                  </FormActions>
+                </Form>
+              </FormContainer>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-medium text-text-primary mb-3">水平布局表单</h3>
+              <FormContainer variant="card">
+                <Form layout="horizontal">
+                  <FormField label="姓名" labelPosition="left" required>
+                    <Input placeholder="请输入姓名" />
+                  </FormField>
+                  <FormField label="性别" labelPosition="left">
+                    <Input placeholder="请选择性别" />
+                  </FormField>
+                  <FormField label="年龄" labelPosition="left">
+                    <Input type="number" placeholder="请输入年龄" />
+                  </FormField>
+                  
+                  <FormActions>
+                    <Button variant="secondary" size="sm">重置</Button>
+                    <Button type="submit" size="sm">提交</Button>
+                  </FormActions>
+                </Form>
+              </FormContainer>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-medium text-text-primary mb-3">行内表单</h3>
+              <FormContainer variant="plain">
+                <Form layout="inline">
+                  <FormField label="搜索">
+                    <Input placeholder="关键词" />
+                  </FormField>
+                  <FormField label="类型">
+                    <Input placeholder="选择类型" />
+                  </FormField>
+                  <FormActions spacing="sm">
+                    <Button size="sm">搜索</Button>
+                    <Button variant="secondary" size="sm">重置</Button>
+                  </FormActions>
+                </Form>
+              </FormContainer>
+            </div>
+          </div>
+          </Card>
+        </div>
+
+        {/* Select组件 */}
+        <div id="select">
+          <Card>
+          <h2 className="text-xl font-bold text-text-primary mb-4">选择器组件</h2>
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-medium text-text-primary mb-3">基础选择器</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Select
+                  placeholder="请选择城市"
+                  options={[
+                    { value: 'beijing', label: '北京' },
+                    { value: 'shanghai', label: '上海' },
+                    { value: 'guangzhou', label: '广州' },
+                    { value: 'shenzhen', label: '深圳' }
+                  ]}
+                />
+                <Select
+                  placeholder="请选择语言"
+                  clearable
+                  options={[
+                    { value: 'zh', label: '中文', description: '简体中文' },
+                    { value: 'en', label: 'English', description: 'English Language' },
+                    { value: 'ja', label: '日本語', description: 'Japanese Language' }
+                  ]}
+                />
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-medium text-text-primary mb-3">多选选择器</h3>
+              <Select
+                placeholder="请选择技能"
+                multiple
+                clearable
+                options={[
+                  { value: 'js', label: 'JavaScript' },
+                  { value: 'ts', label: 'TypeScript' },
+                  { value: 'react', label: 'React' },
+                  { value: 'vue', label: 'Vue.js' },
+                  { value: 'node', label: 'Node.js' },
+                  { value: 'python', label: 'Python' }
+                ]}
+              />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-medium text-text-primary mb-3">可搜索选择器</h3>
+              <Select
+                placeholder="搜索用户"
+                searchable
+                clearable
+                options={[
+                  { value: 'user1', label: '高春强', description: '管理员' },
+                  { value: 'user2', label: '杨伟', description: '操作员' },
+                  { value: 'user3', label: '李明', description: '技术员' },
+                  { value: 'user4', label: '王芳', description: '设计师' }
+                ]}
+              />
+            </div>
+          </div>
+          </Card>
+        </div>
+
+        {/* List组件 */}
+        <div id="list">
+          <Card>
+          <h2 className="text-xl font-bold text-text-primary mb-4">列表组件</h2>
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-medium text-text-primary mb-3">基础列表</h3>
+              <ListContainer title="用户列表" description="系统中的用户信息">
+                <List variant="bordered">
+                  <ListItem 
+                    title="高春强"
+                    subtitle="管理员"
+                    avatar={<Avatar name="高春强" />}
+                    extra={<Badge variant="success">在线</Badge>}
+                    arrow
+                    clickable
+                  />
+                  <ListItem 
+                    title="杨伟"
+                    subtitle="操作员"
+                    avatar={<Avatar name="杨伟" />}
+                    extra={<Badge variant="warning">离线</Badge>}
+                    arrow
+                    clickable
+                  />
+                </List>
+              </ListContainer>
+            </div>
+          </div>
+          </Card>
+        </div>
+
+        {/* Navigation组件 */}
+        <div id="navigation">
+          <Card>
+          <h2 className="text-xl font-bold text-text-primary mb-4">导航组件</h2>
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-medium text-text-primary mb-3">标签导航</h3>
+              <TabNavigation
+                items={[
+                  { key: 'overview', title: '概览' },
+                  { key: 'projects', title: '项目', badge: <Badge variant="primary" size="sm">12</Badge> },
+                  { key: 'users', title: '用户' },
+                  { key: 'settings', title: '设置', disabled: true }
+                ]}
+                activeKey="overview"
+              />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-medium text-text-primary mb-3">面包屑导航</h3>
+              <Breadcrumb
+                items={[
+                  { id: '1', label: '首页', href: '/' },
+                  { id: '2', label: '项目管理', href: '/projects' },
+                  { id: '3', label: '激光切割项目', href: '/projects/laser' },
+                  { id: '4', label: '项目详情' }
+                ]}
+              />
+            </div>
+          </div>
+          </Card>
+        </div>
+
+        {/* UnifiedWorkersSidebar组件 */}
+        <div id="unified-workers-sidebar">
+          <Card>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-text-primary">统一风格工人侧边栏</h2>
+            <div className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded font-mono">
+              UnifiedWorkersSidebar.tsx
+            </div>
+          </div>
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-medium text-text-primary mb-3">以活跃项目侧边栏为准的统一风格</h3>
+              <div className="bg-gray-50 p-4 rounded-lg mb-4">
+                <h4 className="font-medium mb-2">设计特点</h4>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• 采用ProjectTree的分组折叠设计模式</li>
+                  <li>• 统一的视觉样式：背景、边框、间距</li>
+                  <li>• 与活跃项目侧边栏保持一致的交互体验</li>
+                  <li>• 支持部门管理的CRUD操作</li>
+                  <li>• 管理员权限控制</li>
+                </ul>
+              </div>
+              
+              <div className="border border-gray-200 rounded-lg overflow-hidden" style={{ height: '500px' }}>
+                <UnifiedWorkersSidebar
+                  selectedDepartment={selectedDepartment}
+                  onDepartmentChange={setSelectedDepartment}
+                  onRefresh={() => console.log('刷新工人数据')}
+                  className="h-full"
+                />
+              </div>
+              
+              <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                <p className="text-sm text-blue-700">
+                  <strong>当前选择：</strong> {selectedDepartment === 'all' ? '全部工人' : selectedDepartment}
+                </p>
+              </div>
+            </div>
+          </div>
+          </Card>
+        </div>
+
+        {/* 统一侧边栏组件 */}
+        <div id="all-sidebars">
+          <Card>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-text-primary">通用统一侧边栏组件</h2>
+            <div className="flex space-x-2">
+              <div className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-mono">
+                UnifiedSidebar.tsx
+              </div>
+              <div className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded font-mono">
+                AllSidebarsDemo.tsx
+              </div>
+            </div>
+          </div>
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-medium text-text-primary mb-3">所有侧边栏的统一风格方案</h3>
+              <AllSidebarsDemo />
+            </div>
+          </div>
+          </Card>
+        </div>
       </div>
       
       {/* Toast容器 */}
@@ -1627,6 +2325,16 @@ export default function DesignSystemPage() {
         onRemove={removeToast}
         position="top-right"
       />
+      
+      {/* 通知容器 */}
+      <NotificationManager
+        notifications={notification.notifications}
+        onRemove={notification.removeNotification}
+        position="top-right"
+      />
+      
+      {/* 对话框渲染器 */}
+      <dialog.DialogRenderer />
       
       {/* 全屏加载 */}
       {showLoading && (

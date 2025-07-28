@@ -3,6 +3,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { Loading } from '@/components/ui';
 
 interface SearchResult {
   id: number;
@@ -48,8 +49,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
     return (
       <div className={`space-y-6 ${className}`}>
         <div className="text-center py-12">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-4"></div>
-          <p className="text-text-secondary">正在搜索中...</p>
+          <Loading size="lg" text="正在搜索中..." />
         </div>
       </div>
     );

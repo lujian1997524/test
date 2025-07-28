@@ -155,20 +155,6 @@ export function ProjectTree({
     });
   };
 
-  // 展开所有节点
-  const expandAll = () => {
-    const allNodeIds = new Set<string>();
-    treeNodes.forEach(node => {
-      allNodeIds.add(node.id);
-    });
-    setExpandedNodes(allNodeIds);
-  };
-
-  // 折叠所有节点
-  const collapseAll = () => {
-    setExpandedNodes(new Set());
-  };
-
   // 清除搜索
   const clearSearch = () => {
     setSearchTerm('');
@@ -194,15 +180,15 @@ export function ProjectTree({
   return (
     <div className={`bg-white rounded-ios-lg border border-macos15-separator ${className}`}>
       {/* 头部工具栏 */}
-      <div className="p-4 border-b border-macos15-separator">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-text-primary">项目导航</h2>
-          <div className="flex items-center space-x-2">
+      <div className="p-3 border-b border-macos15-separator">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-base font-semibold text-text-primary">项目导航</h2>
+          <div className="flex items-center space-x-1.5">
             {/* 视图切换 */}
-            <div className="flex bg-macos15-control rounded-ios-md p-1">
+            <div className="flex bg-macos15-control rounded-ios-md p-0.5">
               <button
                 onClick={() => setViewMode('status')}
-                className={`px-3 py-1 text-xs rounded-ios-sm transition-all ${
+                className={`px-2.5 py-1 text-xs rounded-ios-sm transition-all ${
                   viewMode === 'status'
                     ? 'bg-white text-ios18-blue shadow-sm'
                     : 'text-text-secondary hover:text-text-primary'
@@ -212,7 +198,7 @@ export function ProjectTree({
               </button>
               <button
                 onClick={() => setViewMode('priority')}
-                className={`px-3 py-1 text-xs rounded-ios-sm transition-all ${
+                className={`px-2.5 py-1 text-xs rounded-ios-sm transition-all ${
                   viewMode === 'priority'
                     ? 'bg-white text-ios18-blue shadow-sm'
                     : 'text-text-secondary hover:text-text-primary'
@@ -246,7 +232,7 @@ export function ProjectTree({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="搜索项目..."
-            className="w-full pl-10 pr-10 py-2 text-sm border border-macos15-separator rounded-ios-md focus:border-ios18-blue focus:outline-none focus:ring-2 focus:ring-ios18-blue focus:ring-opacity-50"
+            className="w-full pl-10 pr-10 py-2 text-sm border border-macos15-separator rounded-ios-md focus:border-ios18-blue focus:outline-none focus:ring-1 focus:ring-ios18-blue focus:ring-opacity-50"
           />
           {searchTerm && (
             <button
@@ -260,25 +246,9 @@ export function ProjectTree({
           )}
         </div>
 
-        {/* 展开/折叠控制 */}
-        <div className="flex items-center justify-between text-xs text-text-secondary">
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={expandAll}
-              className="hover:text-text-primary transition-colors"
-            >
-              展开全部
-            </button>
-            <button
-              onClick={collapseAll}
-              className="hover:text-text-primary transition-colors"
-            >
-              折叠全部
-            </button>
-          </div>
-          <div>
-            共 {filteredProjects.length} 个项目
-          </div>
+        {/* 项目统计信息 */}
+        <div className="text-xs text-text-secondary">
+          共 {filteredProjects.length} 个项目
         </div>
       </div>
 

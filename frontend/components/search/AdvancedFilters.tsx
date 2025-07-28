@@ -2,6 +2,10 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Select, SelectOption } from '@/components/ui/Select';
+import { ChevronDownIcon, AdjustmentsHorizontalIcon } from '@heroicons/react/24/outline';
 
 interface AdvancedFiltersProps {
   onFilterChange: (filters: any) => void;
@@ -22,6 +26,43 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
     dateTo: '',
     sort: 'relevance'
   });
+
+  // 定义选项数据
+  const typeOptions: SelectOption[] = [
+    { value: 'all', label: '全部类型' },
+    { value: 'projects', label: '项目' },
+    { value: 'workers', label: '工人' },
+    { value: 'drawings', label: '图纸' }
+  ];
+
+  const statusOptions: SelectOption[] = [
+    { value: '', label: '所有状态' },
+    { value: 'pending', label: '待处理' },
+    { value: 'in_progress', label: '进行中' },
+    { value: 'completed', label: '已完成' }
+  ];
+
+  const priorityOptions: SelectOption[] = [
+    { value: '', label: '所有优先级' },
+    { value: 'high', label: '高优先级' },
+    { value: 'medium', label: '中优先级' },
+    { value: 'low', label: '低优先级' }
+  ];
+
+  const departmentOptions: SelectOption[] = [
+    { value: '', label: '所有部门' },
+    { value: '激光切割部', label: '激光切割部' },
+    { value: '焊接部', label: '焊接部' },
+    { value: '质检部', label: '质检部' },
+    { value: '包装部', label: '包装部' }
+  ];
+
+  const sortOptions: SelectOption[] = [
+    { value: 'relevance', label: '相关度' },
+    { value: 'date_desc', label: '创建时间 (新→旧)' },
+    { value: 'date_asc', label: '创建时间 (旧→新)' },
+    { value: 'name', label: '名称排序' }
+  ];
 
   const handleFilterChange = (key: string, value: string) => {
     const newFilters = { ...filters, [key]: value };
@@ -49,31 +90,33 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
 
   return (
     <div className={`relative ${className}`}>
-      <motion.button
+      <Button
+        variant="secondary"
+        size="md"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center space-x-2 px-4 py-2 bg-white/80 backdrop-blur-xl border border-gray-200 rounded-xl text-text-primary hover:bg-gray-50 transition-colors"
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
+        className="bg-white/80 backdrop-blur-xl border border-gray-200 rounded-xl text-text-primary hover:bg-gray-50 transition-colors"
       >
-        <span className="text-lg">⚙️</span>
-        <span>高级筛选</span>
-        {activeFiltersCount > 0 && (
+        <div className="flex items-center space-x-2">
+          <AdjustmentsHorizontalIcon className="w-5 h-5" />
+          <span>高级筛选</span>
+          {activeFiltersCount > 0 && (
+            <motion.span
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              className="bg-blue-500 text-white text-xs rounded-full px-2 py-1 min-w-[20px] text-center"
+            >
+              {activeFiltersCount}
+            </motion.span>
+          )}
           <motion.span
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            className="bg-blue-500 text-white text-xs rounded-full px-2 py-1 min-w-[20px] text-center"
+            animate={{ rotate: isOpen ? 180 : 0 }}
+            transition={{ duration: 0.2 }}
+            className="text-text-tertiary"
           >
-            {activeFiltersCount}
+            <ChevronDownIcon className="w-4 h-4" />
           </motion.span>
-        )}
-        <motion.span
-          animate={{ rotate: isOpen ? 180 : 0 }}
-          transition={{ duration: 0.2 }}
-          className="text-text-tertiary"
-        >
-          ▼
-        </motion.span>
-      </motion.button>
+        </div>
+      </Button>
 
       <AnimatePresence>
         {isOpen && (
@@ -88,12 +131,14 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
               {/* 标题 */}
               <div className="flex items-center justify-between">
                 <h3 className="font-medium text-text-primary">筛选条件</h3>
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={clearFilters}
-                  className="text-sm text-blue-600 hover:text-blue-700 transition-colors"
+                  className="text-blue-600 hover:text-blue-700"
                 >
                   清除全部
-                </button>
+                </Button>
               </div>
 
               {/* 搜索类型 */}
@@ -101,16 +146,12 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                 <label className="block text-sm font-medium text-text-secondary mb-2">
                   搜索类型
                 </label>
-                <select
+                <Select
                   value={filters.type}
-                  onChange={(e) => handleFilterChange('type', e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="all">全部类型</option>
-                  <option value="projects">项目</option>
-                  <option value="workers">工人</option>
-                  <option value="drawings">图纸</option>
-                </select>
+                  onChange={(value) => handleFilterChange('type', value as string)}
+                  options={typeOptions}
+                  variant="default"
+                />
               </div>
 
               {/* 状态筛选 */}
@@ -119,16 +160,12 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                   <label className="block text-sm font-medium text-text-secondary mb-2">
                     项目状态
                   </label>
-                  <select
+                  <Select
                     value={filters.status}
-                    onChange={(e) => handleFilterChange('status', e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">所有状态</option>
-                    <option value="pending">待处理</option>
-                    <option value="in_progress">进行中</option>
-                    <option value="completed">已完成</option>
-                  </select>
+                    onChange={(value) => handleFilterChange('status', value as string)}
+                    options={statusOptions}
+                    variant="default"
+                  />
                 </div>
               )}
 
@@ -138,16 +175,12 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                   <label className="block text-sm font-medium text-text-secondary mb-2">
                     优先级
                   </label>
-                  <select
+                  <Select
                     value={filters.priority}
-                    onChange={(e) => handleFilterChange('priority', e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">所有优先级</option>
-                    <option value="high">高优先级</option>
-                    <option value="medium">中优先级</option>
-                    <option value="low">低优先级</option>
-                  </select>
+                    onChange={(value) => handleFilterChange('priority', value as string)}
+                    options={priorityOptions}
+                    variant="default"
+                  />
                 </div>
               )}
 
@@ -157,17 +190,12 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                   <label className="block text-sm font-medium text-text-secondary mb-2">
                     部门
                   </label>
-                  <select
+                  <Select
                     value={filters.department}
-                    onChange={(e) => handleFilterChange('department', e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">所有部门</option>
-                    <option value="激光切割部">激光切割部</option>
-                    <option value="焊接部">焊接部</option>
-                    <option value="质检部">质检部</option>
-                    <option value="包装部">包装部</option>
-                  </select>
+                    onChange={(value) => handleFilterChange('department', value as string)}
+                    options={departmentOptions}
+                    variant="default"
+                  />
                 </div>
               )}
 
@@ -177,19 +205,19 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                   创建日期
                 </label>
                 <div className="grid grid-cols-2 gap-2">
-                  <input
+                  <Input
                     type="date"
                     value={filters.dateFrom}
                     onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
-                    className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                     placeholder="开始日期"
+                    variant="default"
                   />
-                  <input
+                  <Input
                     type="date"
                     value={filters.dateTo}
                     onChange={(e) => handleFilterChange('dateTo', e.target.value)}
-                    className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                     placeholder="结束日期"
+                    variant="default"
                   />
                 </div>
               </div>
@@ -199,26 +227,24 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                 <label className="block text-sm font-medium text-text-secondary mb-2">
                   排序方式
                 </label>
-                <select
+                <Select
                   value={filters.sort}
-                  onChange={(e) => handleFilterChange('sort', e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="relevance">相关度</option>
-                  <option value="date_desc">创建时间 (新→旧)</option>
-                  <option value="date_asc">创建时间 (旧→新)</option>
-                  <option value="name">名称排序</option>
-                </select>
+                  onChange={(value) => handleFilterChange('sort', value as string)}
+                  options={sortOptions}
+                  variant="default"
+                />
               </div>
 
               {/* 应用按钮 */}
               <div className="flex space-x-3 pt-4">
-                <button
+                <Button
+                  variant="primary"
+                  size="md"
                   onClick={() => setIsOpen(false)}
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 font-medium"
+                  className="flex-1"
                 >
                   应用筛选
-                </button>
+                </Button>
               </div>
             </div>
           </motion.div>

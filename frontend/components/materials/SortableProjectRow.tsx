@@ -4,7 +4,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { StatusToggle } from '@/components/ui';
+import { StatusToggle, Button, TableCell } from '@/components/ui';
 import type { StatusType } from '@/components/ui';
 import { ArchiveBoxIcon } from '@heroicons/react/24/outline';
 
@@ -153,7 +153,7 @@ export const SortableProjectRow: React.FC<SortableProjectRowProps> = ({
       className={`hover:bg-gray-50/50 transition-colors ${isDragging ? 'opacity-50 z-50' : ''}`}
     >
       {/* 序号 - 拖拽手柄 */}
-      <td className="px-4 py-4">
+      <TableCell>
         <div className="flex items-center space-x-2">
           <div 
             {...listeners}
@@ -166,10 +166,10 @@ export const SortableProjectRow: React.FC<SortableProjectRowProps> = ({
           </div>
           <div className="text-sm font-medium text-text-primary">{index + 1}</div>
         </div>
-      </td>
+      </TableCell>
       
       {/* 项目名 */}
-      <td className="px-4 py-4">
+      <TableCell>
         <div className="font-medium text-text-primary">{project.name}</div>
         <div className="text-xs flex items-center space-x-1">
           <span className="text-text-secondary">{getStatusText(project.status)}</span>
@@ -178,14 +178,14 @@ export const SortableProjectRow: React.FC<SortableProjectRowProps> = ({
           <span className="text-text-secondary">•</span>
           <span className="text-text-secondary">{project.assignedWorker?.name || '未分配'}</span>
         </div>
-      </td>
+      </TableCell>
       
       {/* 厚度状态列 */}
       {thicknessSpecs.map(spec => {
         const materialStatus = getProjectMaterialStatusForTable(project.id, spec.id);
         
         return (
-          <td key={spec.id} className="px-3 py-4 text-center">
+          <TableCell key={spec.id} align="center" className="px-3 py-4">
             <StatusToggle
               status={materialStatus as StatusType}
               onChange={(newStatus) => {
@@ -194,12 +194,12 @@ export const SortableProjectRow: React.FC<SortableProjectRowProps> = ({
               size="md"
               disabled={viewType === 'completed'} // 过往项目禁用编辑
             />
-          </td>
+          </TableCell>
         );
       })}
       
       {/* 创建时间 */}
-      <td className="px-4 py-4">
+      <TableCell>
         <div className="text-sm text-text-primary">
           {project.createdAt ? new Date(project.createdAt).toLocaleString('zh-CN', {
             year: 'numeric',
@@ -209,10 +209,10 @@ export const SortableProjectRow: React.FC<SortableProjectRowProps> = ({
             minute: '2-digit'
           }) : '-'}
         </div>
-      </td>
+      </TableCell>
       
       {/* 开始时间 */}
-      <td className="px-4 py-4">
+      <TableCell>
         <div className="text-sm text-text-primary">
           {projectStartTime ? new Date(projectStartTime).toLocaleString('zh-CN', {
             year: 'numeric',
@@ -222,10 +222,10 @@ export const SortableProjectRow: React.FC<SortableProjectRowProps> = ({
             minute: '2-digit'
           }) : '-'}
         </div>
-      </td>
+      </TableCell>
       
       {/* 完成时间 */}
-      <td className="px-4 py-4">
+      <TableCell>
         <div className="text-sm text-text-primary">
           {projectCompletedTime ? new Date(projectCompletedTime).toLocaleString('zh-CN', {
             year: 'numeric',
@@ -235,10 +235,10 @@ export const SortableProjectRow: React.FC<SortableProjectRowProps> = ({
             minute: '2-digit'
           }) : '-'}
         </div>
-      </td>
+      </TableCell>
       
       {/* 图纸 */}
-      <td className="px-4 py-4">
+      <TableCell>
         <div className="flex items-center space-x-1">
           {project.drawings && project.drawings.length > 0 ? (
             <div className="flex flex-wrap gap-1">
@@ -259,58 +259,62 @@ export const SortableProjectRow: React.FC<SortableProjectRowProps> = ({
               >
                 {project.drawings.length}个
               </span>
-              <button 
+              <Button 
                 onClick={() => onProjectSelect(project.id)}
-                className="text-xs text-green-600 hover:text-green-800 hover:bg-green-50 px-1 py-1 rounded transition-colors"
-                title={`为项目 ${project.name} 添加更多图纸`}
+                variant="ghost"
+                size="sm"
+                className="text-xs text-green-600 hover:text-green-800 hover:bg-green-50 px-1 py-1 rounded h-auto"
               >
                 +
-              </button>
+              </Button>
             </div>
           ) : (
-            <button 
+            <Button 
               onClick={() => onProjectSelect(project.id)}
-              className="text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded transition-colors"
-              title={`为项目 ${project.name} 上传图纸`}
+              variant="ghost"
+              size="sm"
+              className="text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded h-auto"
             >
               + 上传图纸
-            </button>
+            </Button>
           )}
         </div>
-      </td>
+      </TableCell>
 
       {/* 操作 */}
-      <td className="px-4 py-4">
+      <TableCell>
         <div className="flex items-center space-x-2">
           {/* 活跃项目视图：显示"移至过往"按钮 */}
           {project.status === 'completed' && viewType !== 'completed' && (
-            <button
+            <Button
               onClick={() => handleMoveToPast(project.id)}
               disabled={movingToPast === project.id}
-              className="inline-flex items-center px-2 py-1 text-xs font-medium text-orange-700 bg-orange-100 hover:bg-orange-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors"
-              title="移动到过往项目"
+              variant="ghost"
+              size="sm"
+              className="inline-flex items-center px-2 py-1 text-xs font-medium text-orange-700 bg-orange-100 hover:bg-orange-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-md h-auto"
             >
               <ArchiveBoxIcon className="w-3 h-3 mr-1" />
               {movingToPast === project.id ? '移动中...' : '移至过往'}
-            </button>
+            </Button>
           )}
           
           {/* 过往项目视图：显示"恢复项目"按钮 */}
           {viewType === 'completed' && (
-            <button
+            <Button
               onClick={() => handleRestoreFromPast(project.id)}
               disabled={restoringFromPast === project.id}
-              className="inline-flex items-center px-2 py-1 text-xs font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors"
-              title="恢复到活跃项目"
+              variant="ghost"
+              size="sm"
+              className="inline-flex items-center px-2 py-1 text-xs font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-md h-auto"
             >
               <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
               {restoringFromPast === project.id ? '恢复中...' : '恢复项目'}
-            </button>
+            </Button>
           )}
         </div>
-      </td>
+      </TableCell>
     </motion.tr>
   );
 };

@@ -51,7 +51,7 @@ export { Modal, ConfirmModal } from './Modal'
 export type { ModalProps, ConfirmModalProps } from './Modal'
 
 export { Dropdown } from './Dropdown'
-export type { DropdownProps, DropdownOption } from './Dropdown'
+export type { DropdownOption } from './Dropdown'
 
 export { TabBar, Tabs } from './TabBar'
 export type { TabBarProps, TabsProps, TabItem } from './TabBar'
@@ -94,3 +94,28 @@ export type { TimelineProps, TimelineItem } from './Timeline'
 
 export { Pagination, SimplePagination, MiniPagination, FullPagination } from './Pagination'
 export type { PaginationProps } from './Pagination'
+
+// 新增组件导出
+export { NotificationItem, NotificationContainer as NotificationManager, useNotification } from './Notification'
+export type { NotificationConfig, NotificationType, NotificationPosition } from './Notification'
+
+export { Dialog, useDialog } from './Dialog'
+export type { DialogConfig, DialogType, DialogVariant, DialogButton } from './Dialog'
+
+export { Table, TableHeader, TableBody, TableRow, TableCell, TableContainer } from './Table'
+export type { TableProps, TableHeaderProps, TableBodyProps, TableRowProps, TableCellProps, TableContainerProps } from './Table'
+
+export { SortableTableRow } from './SortableTableRow'
+export type { SortableTableRowProps } from './SortableTableRow'
+
+export { Form, FormGroup, FormField, FormActions, FormContainer, useFormContext } from './Form'
+export type { FormProps, FormGroupProps, FormFieldProps, FormActionsProps, FormContainerProps } from './Form'
+
+export { Select } from './Select'
+export type { SelectProps, SelectOption } from './Select'
+
+export { List, ListItem, ListGroup, ListAction, ListContainer } from './List'
+export type { ListProps, ListItemProps, ListGroupProps, ListActionProps, ListContainerProps } from './List'
+
+export { Navigation, NavigationItem, NavigationGroup, NavigationDivider, TabNavigation } from './Navigation'
+export type { NavigationProps, NavigationItemProps, NavigationGroupProps, NavigationDividerProps, TabNavigationProps } from './Navigation'

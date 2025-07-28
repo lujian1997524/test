@@ -29,69 +29,53 @@ export const Tooltip: React.FC<TooltipProps> = ({
 }) => {
   const [internalVisible, setInternalVisible] = useState(false)
   const [position, setPosition] = useState({ x: 0, y: 0 })
+  const [isMounted, setIsMounted] = useState(false)
   const triggerRef = useRef<HTMLDivElement>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
   const timeoutRef = useRef<NodeJS.Timeout>()
+
+  // 确保只在客户端挂载后才添加交互属性
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   const isVisible = visible !== undefined ? visible : internalVisible
 
   // 计算工具提示位置
   const calculatePosition = () => {
-    if (!triggerRef.current || !tooltipRef.current) return
+    if (!triggerRef.current) return { x: 0, y: 0 }
 
     const triggerRect = triggerRef.current.getBoundingClientRect()
-    const tooltipRect = tooltipRef.current.getBoundingClientRect()
-    const scrollX = window.pageXOffset
-    const scrollY = window.pageYOffset
+    const scrollX = window.pageXOffset || document.documentElement.scrollLeft
+    const scrollY = window.pageYOffset || document.documentElement.scrollTop
 
     let x = 0
     let y = 0
 
+    // 简化位置计算
     switch (placement) {
       case 'top':
-        x = triggerRect.left + triggerRect.width / 2 - tooltipRect.width / 2
-        y = triggerRect.top - tooltipRect.height - 8
-        break
-      case 'top-start':
-        x = triggerRect.left
-        y = triggerRect.top - tooltipRect.height - 8
-        break
-      case 'top-end':
-        x = triggerRect.right - tooltipRect.width
-        y = triggerRect.top - tooltipRect.height - 8
+        x = triggerRect.left + triggerRect.width / 2
+        y = triggerRect.top - 8
         break
       case 'bottom':
-        x = triggerRect.left + triggerRect.width / 2 - tooltipRect.width / 2
-        y = triggerRect.bottom + 8
-        break
-      case 'bottom-start':
-        x = triggerRect.left
-        y = triggerRect.bottom + 8
-        break
-      case 'bottom-end':
-        x = triggerRect.right - tooltipRect.width
+        x = triggerRect.left + triggerRect.width / 2
         y = triggerRect.bottom + 8
         break
       case 'left':
-        x = triggerRect.left - tooltipRect.width - 8
-        y = triggerRect.top + triggerRect.height / 2 - tooltipRect.height / 2
+        x = triggerRect.left - 8
+        y = triggerRect.top + triggerRect.height / 2
         break
       case 'right':
         x = triggerRect.right + 8
-        y = triggerRect.top + triggerRect.height / 2 - tooltipRect.height / 2
+        y = triggerRect.top + triggerRect.height / 2
         break
+      default:
+        x = triggerRect.left + triggerRect.width / 2
+        y = triggerRect.top - 8
     }
 
-    // 边界检测
-    const viewportWidth = window.innerWidth
-    const viewportHeight = window.innerHeight
-
-    if (x < 0) x = 8
-    if (x + tooltipRect.width > viewportWidth) x = viewportWidth - tooltipRect.width - 8
-    if (y < 0) y = 8
-    if (y + tooltipRect.height > viewportHeight) y = viewportHeight - tooltipRect.height - 8
-
-    setPosition({ x: x + scrollX, y: y + scrollY })
+    return { x: x + scrollX, y: y + scrollY }
   }
 
   // 显示工具提示
@@ -102,10 +86,15 @@ export const Tooltip: React.FC<TooltipProps> = ({
       clearTimeout(timeoutRef.current)
     }
 
-    timeoutRef.current = setTimeout(() => {
+    if (delay > 0) {
+      timeoutRef.current = setTimeout(() => {
+        setInternalVisible(true)
+        onVisibleChange?.(true)
+      }, delay)
+    } else {
       setInternalVisible(true)
       onVisibleChange?.(true)
-    }, delay)
+    }
   }
 
   // 隐藏工具提示
@@ -147,11 +136,19 @@ export const Tooltip: React.FC<TooltipProps> = ({
 
   // 位置更新
   useEffect(() => {
-    if (isVisible) {
-      calculatePosition()
+    if (isVisible && triggerRef.current) {
+      // 立即计算位置
+      const newPosition = calculatePosition()
+      setPosition(newPosition)
       
-      const handleResize = () => calculatePosition()
-      const handleScroll = () => calculatePosition()
+      const handleResize = () => {
+        const newPosition = calculatePosition()
+        setPosition(newPosition)
+      }
+      const handleScroll = () => {
+        const newPosition = calculatePosition()
+        setPosition(newPosition)
+      }
       
       window.addEventListener('resize', handleResize)
       window.addEventListener('scroll', handleScroll)
@@ -172,28 +169,43 @@ export const Tooltip: React.FC<TooltipProps> = ({
     }
   }, [])
 
-  // 获取箭头样式
-  const getArrowStyle = () => {
-    const arrowSize = 6
-    const baseStyle = `absolute w-0 h-0 border-solid`
-    
-    switch (placement) {
-      case 'top':
-      case 'top-start':
-      case 'top-end':
-        return `${baseStyle} top-full left-1/2 transform -translate-x-1/2 border-l-${arrowSize} border-r-${arrowSize} border-t-${arrowSize} border-l-transparent border-r-transparent border-t-gray-900`
-      case 'bottom':
-      case 'bottom-start':
-      case 'bottom-end':
-        return `${baseStyle} bottom-full left-1/2 transform -translate-x-1/2 border-l-${arrowSize} border-r-${arrowSize} border-b-${arrowSize} border-l-transparent border-r-transparent border-b-gray-900`
-      case 'left':
-        return `${baseStyle} left-full top-1/2 transform -translate-y-1/2 border-t-${arrowSize} border-b-${arrowSize} border-l-${arrowSize} border-t-transparent border-b-transparent border-l-gray-900`
-      case 'right':
-        return `${baseStyle} right-full top-1/2 transform -translate-y-1/2 border-t-${arrowSize} border-b-${arrowSize} border-r-${arrowSize} border-t-transparent border-b-transparent border-r-gray-900`
-      default:
-        return ''
+  // 获取箭头样式 - 简化版本
+  const getArrowStyle = (): React.CSSProperties => {
+    return {
+      position: 'absolute',
+      width: 0,
+      height: 0,
+      borderStyle: 'solid',
+      borderWidth: '4px',
+      borderColor: 'transparent',
+      display: 'none' // 暂时隐藏箭头，先确保tooltip本身工作
     }
   }
+
+  // 避免水合不匹配：确保服务端和客户端的属性保持一致
+  const triggerProps = React.useMemo(() => {
+    const props: any = {
+      ref: triggerRef,
+      className: `inline-block ${className}`,
+      onMouseEnter: handleMouseEnter,
+      onMouseLeave: handleMouseLeave,
+      onClick: handleClick,
+      onFocus: handleFocus,
+      onBlur: handleBlur
+    }
+
+    // 只在客户端挂载后添加交互属性，避免SSR不匹配
+    if (isMounted) {
+      if (trigger === 'focus') {
+        props.tabIndex = 0
+      }
+      if (trigger === 'click') {
+        props.role = 'button'
+      }
+    }
+
+    return props
+  }, [trigger, className, handleMouseEnter, handleMouseLeave, handleClick, handleFocus, handleBlur, isMounted])
 
   if (typeof window === 'undefined') {
     return <div className={`inline-block ${className}`}>{children}</div>
@@ -201,15 +213,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
 
   return (
     <>
-      <div
-        ref={triggerRef}
-        className={`inline-block ${className}`}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        onClick={handleClick}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
-      >
+      <div {...triggerProps}>
         {children}
       </div>
 
@@ -229,7 +233,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
               transition={{ duration: 0.15 }}
             >
               {content}
-              <div className={getArrowStyle()} />
+              <div style={getArrowStyle()} />
             </motion.div>
           )}
         </AnimatePresence>,

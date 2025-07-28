@@ -26,7 +26,7 @@ export interface DropdownProps {
 }
 
 export const Dropdown: React.FC<DropdownProps> = ({
-  options,
+  options = [], // 默认为空数组
   value,
   placeholder = '请选择...',
   disabled = false,

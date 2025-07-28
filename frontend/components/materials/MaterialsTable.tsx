@@ -7,7 +7,7 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSo
 import { SortableProjectRow } from './SortableProjectRow';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMaterialStore, useProjectStore, type ProjectState } from '@/stores';
-import { StatusToggle, DrawingHoverCard } from '@/components/ui';
+import { StatusToggle, DrawingHoverCard, Table, TableHeader, TableBody, TableRow, TableCell, TableContainer, Empty, EmptyData, useDialog } from '@/components/ui';
 import type { StatusType } from '@/components/ui';
 import { ArchiveBoxIcon } from '@heroicons/react/24/outline';
 import cadFileHandler from '@/utils/cadFileHandler';
@@ -15,6 +15,8 @@ import {
   updateMaterialStatusShared, 
   getProjectMaterialStatus 
 } from '@/utils/materialStatusManager';
+import { ResponsiveMaterialsTable } from './ResponsiveMaterialsTable';
+import { useResponsive } from '@/hooks/useResponsive';
 
 interface ThicknessSpec {
   id: number;
@@ -64,6 +66,7 @@ export const MaterialsTable = ({
   thicknessFilter = '',
   className = '' 
 }: MaterialsTableProps) => {
+  const { isMobile, isTablet, isDesktop } = useResponsive();
   const [thicknessSpecs, setThicknessSpecs] = useState<ThicknessSpec[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingNotes, setEditingNotes] = useState<{projectId: number, thicknessSpecId: number} | null>(null);
@@ -89,6 +92,9 @@ export const MaterialsTable = ({
   const { token, user } = useAuth();
   const { updateMaterialStatus } = useMaterialStore();
   const { projects, completedProjects, pastProjects, updateProject, fetchProjects, moveToPastProject, restoreFromPastProject } = useProjectStore();
+  
+  // Dialog组件
+  const { alert, confirm, DialogRenderer } = useDialog();
 
   // 配置拖拽传感器
   const sensors = useSensors(
@@ -241,7 +247,8 @@ export const MaterialsTable = ({
 
   // 恢复项目从过往
   const handleRestoreFromPast = async (projectId: number) => {
-    if (!confirm('确定要将此项目恢复到活跃状态吗？项目将重新回到活跃项目列表中。')) {
+    const confirmed = await confirm('确定要将此项目恢复到活跃状态吗？项目将重新回到活跃项目列表中。');
+    if (!confirmed) {
       return;
     }
     
@@ -259,7 +266,8 @@ export const MaterialsTable = ({
 
   // 移动项目到过往
   const handleMoveToPast = async (projectId: number) => {
-    if (!confirm('确定要将此项目移动到过往项目吗？此操作将把项目从活跃状态移动到过往项目管理中。')) {
+    const confirmed = await confirm('确定要将此项目移动到过往项目吗？此操作将把项目从活跃状态移动到过往项目管理中。');
+    if (!confirmed) {
       return;
     }
     
@@ -347,22 +355,6 @@ export const MaterialsTable = ({
     
     return (
       <div className={`bg-white/80 backdrop-blur-xl rounded-2xl border border-gray-200 shadow-lg overflow-hidden flex flex-col ${className}`}>
-        {/* 标题栏 */}
-        <div className="p-6 border-b border-gray-200">
-          <h3 className="text-xl font-semibold text-text-primary">
-            {selectedProjectId ? `项目详情` : '全部项目'}
-          </h3>
-          <p className="text-text-secondary text-sm mt-1">
-            {selectedProjectId ? '项目板材状态管理' : '项目总览和板材状态（支持拖拽排序）'}
-          </p>
-          {isReordering && (
-            <div className="mt-2 text-xs text-blue-600 flex items-center">
-              <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-600 mr-2"></div>
-              正在保存排序...
-            </div>
-          )}
-        </div>
-
         {/* 项目表格 */}
         <div className="flex-1 overflow-auto">
           <DndContext 
@@ -370,72 +362,69 @@ export const MaterialsTable = ({
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
           >
-            <table className="w-full">
-              <thead className="bg-gray-50/50 sticky top-0">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">序号</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">项目名</th>
-                  {/* 厚度列 */}
-                  {thicknessSpecs.map(spec => (
-                    <th key={spec.id} className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {spec.thickness}{spec.unit}
-                    </th>
-                  ))}
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">创建时间</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">开始时间</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">完成时间</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">图纸</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
-                </tr>
-              </thead>
-              <SortableContext 
-                items={projectsToShow.map(p => p.id)} 
-                strategy={verticalListSortingStrategy}
+            <TableContainer 
+              title={viewType === 'completed' ? '过往项目' : '活跃项目'}
+              description={`显示${viewType === 'completed' ? '已完成的' : '进行中的'}项目信息`}
+              showEmptyState={projectsToShow.length === 0}
+              emptyState={{
+                title: viewType === 'completed' ? '暂无过往项目' : '暂无活跃项目',
+                description: viewType === 'active' ? '点击右上角"新建"按钮创建项目' : 
+                           viewType === 'completed' ? '已完成的项目移动到过往后会显示在这里' : ''
+              }}
+            >
+              <Table
+                sortable
+                sortableItems={projectsToShow.map(p => p.id)}
+                onDragEnd={handleDragEnd}
               >
-                <tbody className="divide-y divide-gray-200">
-                  {projectsToShow.map((proj, index) => (
-                    <SortableProjectRow
-                      key={proj.id}
-                      project={proj}
-                      index={index}
-                      thicknessSpecs={thicknessSpecs}
-                      viewType={viewType}
-                      movingToPast={movingToPast}
-                      restoringFromPast={restoringFromPast}
-                      getProjectMaterialStatusForTable={getProjectMaterialStatusForTable}
-                      updateMaterialStatusInTable={updateMaterialStatusInTable}
-                      handleDrawingHover={handleDrawingHover}
-                      handleCloseHover={handleCloseHover}
-                      onProjectSelect={onProjectSelect}
-                      handleMoveToPast={handleMoveToPast}
-                      handleRestoreFromPast={handleRestoreFromPast}
-                      getStatusText={getStatusText}
-                      getPriorityColorBadge={getPriorityColorBadge}
-                      getPriorityText={getPriorityText}
-                    />
-                  ))}
-                </tbody>
-              </SortableContext>
-            </table>
+                <TableHeader>
+                  <TableRow>
+                    <TableCell type="header">序号</TableCell>
+                    <TableCell type="header">项目名</TableCell>
+                    {/* 厚度列 */}
+                    {thicknessSpecs.map(spec => (
+                      <TableCell key={spec.id} type="header" align="center">
+                        {spec.thickness}{spec.unit}
+                      </TableCell>
+                    ))}
+                    <TableCell type="header">创建时间</TableCell>
+                    <TableCell type="header">开始时间</TableCell>
+                    <TableCell type="header">完成时间</TableCell>
+                    <TableCell type="header">图纸</TableCell>
+                    <TableCell type="header">操作</TableCell>
+                  </TableRow>
+                </TableHeader>
+                <SortableContext 
+                  items={projectsToShow.map(p => p.id)} 
+                  strategy={verticalListSortingStrategy}
+                >
+                  <TableBody sortable sortableItems={projectsToShow.map(p => p.id)}>
+                    {projectsToShow.map((proj, index) => (
+                      <SortableProjectRow
+                        key={proj.id}
+                        project={proj}
+                        index={index}
+                        thicknessSpecs={thicknessSpecs}
+                        viewType={viewType}
+                        movingToPast={movingToPast}
+                        restoringFromPast={restoringFromPast}
+                        getProjectMaterialStatusForTable={getProjectMaterialStatusForTable}
+                        updateMaterialStatusInTable={updateMaterialStatusInTable}
+                        handleDrawingHover={handleDrawingHover}
+                        handleCloseHover={handleCloseHover}
+                        onProjectSelect={onProjectSelect}
+                        handleMoveToPast={handleMoveToPast}
+                        handleRestoreFromPast={handleRestoreFromPast}
+                        getStatusText={getStatusText}
+                        getPriorityColorBadge={getPriorityColorBadge}
+                        getPriorityText={getPriorityText}
+                      />
+                    ))}
+                  </TableBody>
+                </SortableContext>
+              </Table>
+            </TableContainer>
           </DndContext>
-          
-          {projectsToShow.length === 0 && (
-            <div className="flex items-center justify-center h-64">
-              <div className="text-center">
-                <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-                <p className="text-gray-500 text-lg">
-                  {viewType === 'completed' ? '暂无过往项目' : '暂无活跃项目'}
-                </p>
-                <p className="text-gray-400 text-sm mt-2">
-                  {viewType === 'active' ? '点击右上角"新建"按钮创建项目' : 
-                   viewType === 'completed' ? '已完成的项目移动到过往后会显示在这里' :
-                   ''}
-                </p>
-              </div>
-            </div>
-          )}
         </div>
         
         {/* 图纸预览卡片 */}
@@ -486,5 +475,31 @@ export const MaterialsTable = ({
     }
   };
 
-  return renderProjectsTable();
+  return (
+    <>
+      {/* 根据设备类型渲染不同的表格 */}
+      {(isMobile || isTablet) ? (
+        <ResponsiveMaterialsTable
+          projects={projectsToShow}
+          thicknessSpecs={thicknessSpecs}
+          viewType={viewType}
+          movingToPast={movingToPast}
+          restoringFromPast={restoringFromPast}
+          getProjectMaterialStatusForTable={getProjectMaterialStatusForTable}
+          updateMaterialStatusInTable={updateMaterialStatusInTable}
+          handleDrawingHover={handleDrawingHover}
+          handleCloseHover={handleCloseHover}
+          onProjectSelect={onProjectSelect}
+          handleMoveToPast={handleMoveToPast}
+          handleRestoreFromPast={handleRestoreFromPast}
+          getStatusText={getStatusText}
+          getPriorityColorBadge={getPriorityColorBadge}
+          getPriorityText={getPriorityText}
+        />
+      ) : (
+        renderProjectsTable()
+      )}
+      <DialogRenderer />
+    </>
+  );
 };

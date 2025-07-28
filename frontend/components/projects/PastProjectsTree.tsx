@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjectStore } from '@/stores';
+import { Loading } from '@/components/ui';
 
 // 使用ProjectState类型，因为这与实际数据结构匹配
 interface PastProject {
@@ -110,10 +111,10 @@ export const PastProjectsTree: React.FC<PastProjectsTreeProps> = ({
   return (
     <div className={`h-full bg-white/80 backdrop-blur-xl border-r border-gray-200 flex flex-col ${className}`}>
       {/* 标题栏 */}
-      <div className="p-4 border-b border-gray-200 flex-shrink-0">
+      <div className="p-3 border-b border-gray-200 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-text-primary">
+            <h3 className="text-base font-semibold text-text-primary">
               过往项目
             </h3>
             <p className="text-sm text-text-secondary mt-1">
@@ -128,7 +129,7 @@ export const PastProjectsTree: React.FC<PastProjectsTreeProps> = ({
               onRefresh?.();
             }}
             disabled={loading}
-            className="p-2 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
+            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
             title="刷新过往项目"
           >
             <svg 
@@ -147,10 +148,7 @@ export const PastProjectsTree: React.FC<PastProjectsTreeProps> = ({
       <div className="flex-1 overflow-y-auto p-4">
         {loading && pastProjects.length === 0 ? (
           <div className="flex items-center justify-center h-32">
-            <div className="text-center">
-              <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-              <p className="text-sm text-gray-500">加载中...</p>
-            </div>
+            <Loading size="md" text="加载中..." />
           </div>
         ) : sortedMonthKeys.length === 0 ? (
           <div className="flex items-center justify-center h-32">

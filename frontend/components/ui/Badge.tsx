@@ -5,7 +5,7 @@ import { motion } from 'framer-motion'
 
 export interface BadgeProps {
   children?: React.ReactNode
-  variant?: 'primary' | 'secondary' | 'success' | 'warning' | 'danger' | 'info'
+  variant?: 'primary' | 'secondary' | 'success' | 'warning' | 'danger' | 'info' | 'outline'
   size?: 'sm' | 'md' | 'lg'
   dot?: boolean
   count?: number
@@ -28,7 +28,8 @@ export const Badge: React.FC<BadgeProps> = ({
     success: 'bg-ios18-teal text-white',
     warning: 'bg-yellow-500 text-white',
     danger: 'bg-red-500 text-white',
-    info: 'bg-ios18-indigo text-white'
+    info: 'bg-ios18-indigo text-white',
+    outline: 'bg-transparent border border-gray-300 text-gray-700 dark:border-gray-600 dark:text-gray-300'
   }
 
   const sizeClasses = {

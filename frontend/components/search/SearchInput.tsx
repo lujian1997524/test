@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
+import { Loading } from '@/components/ui';
 
 interface SearchSuggestion {
   text: string;
@@ -173,7 +174,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
         
         <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-text-tertiary">
           {isLoading ? (
-            <div className="w-5 h-5 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+            <Loading size="xs" />
           ) : (
             <span className="text-xl">🔍</span>
           )}

@@ -28,6 +28,15 @@ export interface Drawing {
   isCommonPart?: boolean;
   tags?: string[];
   projectIds?: number[];
+  project?: {
+    id: number;
+    name: string;
+    status: string;
+  };
+  uploader?: {
+    id: number;
+    name: string;
+  };
 }
 
 export interface DrawingLibraryProps {

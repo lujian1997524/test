@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 
 export interface AlertProps {
   children: React.ReactNode
-  variant?: 'info' | 'success' | 'warning' | 'danger' | 'error'
+  variant?: 'info' | 'success' | 'warning' | 'danger' | 'error' | 'primary'
   title?: string
   onClose?: () => void
   closable?: boolean
@@ -30,6 +30,12 @@ export const Alert: React.FC<AlertProps> = ({
       border: 'border-blue-200 dark:border-blue-800',
       text: 'text-blue-800 dark:text-blue-200',
       icon: '💡'
+    },
+    primary: {
+      bg: 'bg-ios18-blue/10 dark:bg-ios18-blue/20',
+      border: 'border-ios18-blue/30 dark:border-ios18-blue/50',
+      text: 'text-ios18-blue dark:text-ios18-blue',
+      icon: '🚀'
     },
     success: {
       bg: 'bg-green-50 dark:bg-green-900/20',

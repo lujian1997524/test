@@ -5,11 +5,11 @@ import { motion } from 'framer-motion'
 
 export interface ButtonProps {
   children: React.ReactNode
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost'
-  size?: 'sm' | 'md' | 'lg'
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline' | 'success'
+  size?: 'xs' | 'sm' | 'md' | 'lg'
   disabled?: boolean
   loading?: boolean
-  onClick?: () => void
+  onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void
   className?: string
   type?: 'button' | 'submit' | 'reset'
 }
@@ -41,8 +41,18 @@ export const Button: React.FC<ButtonProps> = ({
       hover:bg-ios18-blue hover:bg-opacity-10
       active:scale-95
     `,
+    outline: `
+      bg-transparent text-ios18-blue border border-ios18-blue
+      hover:bg-ios18-blue hover:bg-opacity-10
+      active:scale-95
+    `,
     danger: `
       bg-status-error text-white shadow-ios-md
+      hover:bg-opacity-90 hover:shadow-ios-lg
+      active:scale-95
+    `,
+    success: `
+      bg-status-success text-white shadow-ios-md
       hover:bg-opacity-90 hover:shadow-ios-lg
       active:scale-95
     `,
@@ -54,6 +64,7 @@ export const Button: React.FC<ButtonProps> = ({
   }
 
   const sizeClasses = {
+    xs: 'px-2 py-1 text-xs',
     sm: 'px-3 py-2 text-sm',
     md: 'px-6 py-3 text-base',
     lg: 'px-8 py-4 text-lg'

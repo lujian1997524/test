@@ -6,15 +6,33 @@ const { Department } = require('../models');
 // 获取所有部门
 router.get('/', authenticate, async (req, res) => {
   try {
+    const { Worker } = require('../models');
+    
     const departments = await Department.findAll({
       where: { isActive: true },
       order: [['sortOrder', 'ASC'], ['name', 'ASC']],
       attributes: ['id', 'name', 'description', 'sortOrder']
     });
 
+    // 为每个部门添加工人数量
+    const departmentsWithWorkerCount = await Promise.all(
+      departments.map(async (dept) => {
+        const workerCount = await Worker.count({
+          where: { department: dept.name }
+        });
+        return {
+          id: dept.id,
+          name: dept.name,
+          description: dept.description,
+          sortOrder: dept.sortOrder,
+          workerCount
+        };
+      })
+    );
+
     res.json({
       success: true,
-      departments: departments
+      departments: departmentsWithWorkerCount
     });
   } catch (error) {
     console.error('获取部门列表错误:', error);
@@ -184,7 +202,7 @@ router.delete('/:id', authenticate, async (req, res) => {
     // 检查是否有工人分配到这个部门
     const { Worker } = require('../models');
     const workersInDepartment = await Worker.count({
-      where: { departmentId: id }
+      where: { department: department.name }
     });
 
     if (workersInDepartment > 0) {

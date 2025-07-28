@@ -118,12 +118,16 @@ export const DrawingCard: React.FC<DrawingCardProps> = ({
             <span>{formatFileSize(drawing.fileSize)}</span>
           </div>
 
-          {/* 项目关联数量 */}
-          {drawing.projectIds && drawing.projectIds.length > 0 && (
+          {/* 项目关联信息 */}
+          {drawing.project ? (
+            <div className="text-xs text-blue-600">
+              关联项目：{drawing.project.name}
+            </div>
+          ) : drawing.projectIds && drawing.projectIds.length > 0 ? (
             <div className="text-xs text-blue-600">
               关联 {drawing.projectIds.length} 个项目
             </div>
-          )}
+          ) : null}
 
           {/* 标签 */}
           {drawing.tags && drawing.tags.length > 0 && (
