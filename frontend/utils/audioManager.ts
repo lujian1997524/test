@@ -33,14 +33,14 @@ class AudioManager {
     }
     
     this.config = savedConfig ? JSON.parse(savedConfig) : {
-      enabled: false, // 默认禁用音频功能
+      enabled: true,  // 默认启用音频功能
       volume: 0.6     // 默认音量60%
     };
 
-    // 暂时禁用音频预加载以避免文件加载错误
-    // if (typeof window !== 'undefined') {
-    //   this.preloadSounds();
-    // }
+    // 启用音频预加载
+    if (typeof window !== 'undefined') {
+      this.preloadSounds();
+    }
   }
 
   /**
@@ -71,23 +71,32 @@ class AudioManager {
   async playNotificationSound(type: SoundType): Promise<void> {
     // 只在浏览器环境中播放音频
     if (typeof window === 'undefined' || !this.config.enabled) {
+      console.log('音频已禁用或非浏览器环境');
       return;
     }
 
     try {
-      const audio = this.audioCache.get(type);
+      let audio = this.audioCache.get(type);
+      
+      // 如果缓存中没有音频，直接创建新的
       if (!audio) {
-        return;
+        console.log(`创建新的音频对象: ${this.soundPaths[type]}`);
+        audio = new Audio(this.soundPaths[type]);
+        audio.volume = this.config.volume;
+        this.audioCache.set(type, audio);
       }
 
       // 重置播放位置（防止连续播放问题）
       audio.currentTime = 0;
       audio.volume = this.config.volume;
 
+      console.log(`播放音效: ${type}, 音量: ${this.config.volume}, 路径: ${this.soundPaths[type]}`);
+      
       // 播放音频
       await audio.play();
+      console.log(`音效播放成功: ${type}`);
     } catch (error) {
-      // 静默处理错误，不显示控制台日志
+      console.error(`播放音效失败: ${type}`, error);
     }
   }
 
@@ -172,6 +181,15 @@ class AudioManager {
    * 测试播放音效
    */
   async testSound(type: SoundType) {
+    console.log(`测试音效: ${type}`);
+    
+    // 首先尝试获取音频播放权限
+    try {
+      await this.requestAudioPermission();
+    } catch (error) {
+      console.warn('获取音频权限失败:', error);
+    }
+    
     await this.playNotificationSound(type);
   }
 

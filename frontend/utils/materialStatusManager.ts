@@ -2,6 +2,7 @@
 // 提供项目间一致的材料状态更新功能
 
 import type { StatusType } from '@/components/ui';
+import { notificationManager } from './notificationManager';
 
 // 获取认证token的辅助函数
 const getAuthToken = (): string | null => {
@@ -137,6 +138,17 @@ export const updateProjectStatusRealtime = async (
     try {
       await updateProjectFn(projectId, { status: newStatus as 'pending' | 'in_progress' | 'completed' | 'cancelled' });
       console.log(`项目 ${projectId} 状态更新成功`);
+      
+      // 发送项目状态变更通知
+      const project = projects.find(p => p.id === projectId);
+      if (project) {
+        await notificationManager.showProjectStatusNotification(
+          project.name,
+          currentProject.status,
+          newStatus,
+          project.assignedWorker?.name
+        );
+      }
       
       // 如果项目状态变为已完成，自动归档相关图纸
       if (newStatus === 'completed') {

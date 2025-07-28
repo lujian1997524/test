@@ -14,6 +14,8 @@ import { ThicknessSpecModal } from '@/components/materials/ThicknessSpecModal';
 import { DashboardModal } from '@/components/materials/DashboardModal';
 import { DrawingLibrary, DrawingsSidebar } from '@/components/drawings';
 import { SearchModal } from '@/components/search/SearchModal';
+import { SettingsPage } from '@/components/settings/SettingsPage';
+import { UserProfileModal } from '@/components/user/UserProfileModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjectStore, useMaterialStore } from '@/stores';
 import { NotificationContainer } from '@/components/ui/NotificationContainer';
@@ -50,6 +52,8 @@ function HomeContent() {
   const [drawingStats, setDrawingStats] = useState<{[key: string]: number}>({});
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
   const [showSearchModal, setShowSearchModal] = useState(false);
+  const [showSettingsPage, setShowSettingsPage] = useState(false);
+  const [showUserProfileModal, setShowUserProfileModal] = useState(false);
   
   // 认证信息
   const { token, isAuthenticated, user, logout } = useAuth();
@@ -127,7 +131,7 @@ function HomeContent() {
     if (view === 'dashboard') {
       setShowDashboardModal(true);
     } else if (view === 'settings') {
-      setShowThicknessSpecModal(true);
+      setShowThicknessSpecModal(true); // 板材厚度规格管理
     } else {
       setViewType(view);
       setSelectedProjectId(null);
@@ -241,6 +245,16 @@ function HomeContent() {
   const handleSilentRefreshActive = () => silentRefresh('active');
   const handleSilentRefreshCompleted = () => silentRefresh('completed');
 
+  // 处理用户个人信息点击
+  const handleProfileClick = () => {
+    setShowUserProfileModal(true);
+  };
+
+  // 处理系统设置点击
+  const handleSystemSettingsClick = () => {
+    setShowSettingsPage(true);
+  };
+
   // 渲染侧边栏
   const renderSidebar = () => {
     switch (viewType) {
@@ -306,6 +320,8 @@ function HomeContent() {
       activeView={viewType}
       onViewChange={handleViewChange}
       onSearchClick={() => setShowSearchModal(true)}
+      onSystemSettingsClick={handleSystemSettingsClick}
+      onProfileClick={handleProfileClick}
       sidebar={renderSidebar()}
     >
       {/* 主内容区域 */}
@@ -400,6 +416,18 @@ function HomeContent() {
         isOpen={showSearchModal}
         onClose={() => setShowSearchModal(false)}
         onNavigate={handleSearchNavigate}
+      />
+
+      {/* 设置页面 */}
+      <SettingsPage
+        isOpen={showSettingsPage}
+        onClose={() => setShowSettingsPage(false)}
+      />
+
+      {/* 用户个人信息模态框 */}
+      <UserProfileModal
+        isOpen={showUserProfileModal}
+        onClose={() => setShowUserProfileModal(false)}
       />
 
       {/* 通知容器 */}

@@ -1,4 +1,5 @@
 import { useAuth } from '@/contexts/AuthContext';
+import { configManager } from './configManager';
 
 // SSE事件类型
 export type SSEEventType = 
@@ -82,6 +83,14 @@ class SSEManager {
   // 连接到SSE服务
   connect(token: string): Promise<boolean> {
     return new Promise((resolve, reject) => {
+      // 检查是否启用SSE功能
+      const config = configManager.getConfig();
+      if (!config.features.enableSSE) {
+        console.log('SSE功能已禁用，跳过连接');
+        resolve(false);
+        return;
+      }
+
       if (this.eventSource) {
         console.log('SSE连接已存在，先关闭现有连接');
         this.disconnect();
@@ -126,13 +135,13 @@ class SSEManager {
           });
         });
 
-        // 设置连接超时
+        // 使用配置中的API超时设置
         setTimeout(() => {
           if (this.eventSource?.readyState !== EventSource.OPEN) {
             this.eventSource?.close();
             reject(new Error('SSE连接超时'));
           }
-        }, 10000); // 10秒超时
+        }, config.apiTimeout || 10000);
 
       } catch (error) {
         console.error('创建SSE连接失败:', error);
@@ -256,13 +265,17 @@ class SSEManager {
         break;
 
       case 'project-deleted':
+        const drawingText = data.deletedDrawingsCount && data.deletedDrawingsCount > 0
+          ? ` (同时删除了 ${data.deletedDrawingsCount} 个图纸)`
+          : '';
+        
         notification = {
           id: `project-deleted-${data.projectId}-${timestamp}`,
           type: 'warning',
           title: '项目已删除',
-          message: `${data.userName || '某用户'} 删除了项目 "${data.projectName || '未知项目'}"`,
+          message: `${data.userName || '某用户'} 删除了项目 "${data.projectName || '未知项目'}"${drawingText}`,
           timestamp: new Date().toISOString(),
-          duration: 5000
+          duration: 8000 // 增加显示时间，因为信息更丰富
         };
         break;
     }

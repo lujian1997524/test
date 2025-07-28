@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { sseManager, type NotificationMessage } from '@/utils/sseManager';
 import { audioManager } from '@/utils/audioManager';
+import { notificationManager } from '@/utils/notificationManager';
 
 interface NotificationStore {
   // 状态
@@ -58,6 +59,18 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
       notification.message
     );
     audioManager.playNotificationSound(soundType);
+    
+    // 发送桌面通知
+    notificationManager.showNotification({
+      title: notification.title,
+      body: notification.message,
+      tag: `app-notification-${notification.id}`,
+      data: {
+        type: notification.type,
+        source: 'app-notification',
+        originalId: notification.id
+      }
+    });
     
     // 如果设置了自动消失时间，添加定时器
     if (notification.duration && notification.duration > 0) {

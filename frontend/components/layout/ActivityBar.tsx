@@ -4,6 +4,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui';
 import { useAuth } from '@/contexts/AuthContext';
+import { UserMenu } from './UserMenu';
 import {
   FolderIcon,
   ClockIcon,
@@ -18,6 +19,8 @@ interface ActivityBarProps {
   activeView: 'active' | 'completed' | 'drawings' | 'workers' | 'dashboard' | 'settings';
   onViewChange: (view: 'active' | 'completed' | 'drawings' | 'workers' | 'dashboard' | 'settings') => void;
   onSearchClick?: () => void;
+  onSystemSettingsClick?: () => void;
+  onProfileClick?: () => void;
   className?: string;
 }
 
@@ -25,6 +28,8 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
   activeView,
   onViewChange,
   onSearchClick,
+  onSystemSettingsClick,
+  onProfileClick,
   className = ''
 }) => {
   const { user } = useAuth();
@@ -114,16 +119,6 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
               >
                 <IconComponent className="w-6 h-6" />
                 
-                {/* 活跃指示器 */}
-                {activeView === activity.key && (
-                  <motion.div
-                    layoutId="activeIndicator"
-                    className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-ios18-blue rounded-r"
-                    initial={false}
-                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                  />
-                )}
-                
                 {/* Tooltip */}
                 <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
                   {activity.label}
@@ -157,16 +152,6 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                   >
                     <IconComponent className="w-6 h-6" />
                     
-                    {/* 活跃指示器 */}
-                    {activeView === activity.key && (
-                      <motion.div
-                        layoutId="activeIndicator"
-                        className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-ios18-blue rounded-r"
-                        initial={false}
-                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                      />
-                    )}
-                    
                     {/* Tooltip */}
                     <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
                       {activity.label}
@@ -180,18 +165,12 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
       )}
 
       {/* 用户信息 */}
-      <div className="mt-auto p-2">
-        <div className="w-12 h-12 rounded-lg bg-white/50 flex items-center justify-center group relative">
-          <div className="w-8 h-8 rounded-full bg-ios18-blue flex items-center justify-center">
-            <span className="text-white text-sm font-medium">
-              {user?.name?.charAt(0)}
-            </span>
-          </div>
-          
-          {/* Tooltip */}
-          <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
-            {user?.name} ({user?.role === 'admin' ? '管理员' : '操作员'})
-          </div>
+      <div className="mt-auto">
+        <div className="p-2">
+          <UserMenu 
+            onProfileClick={onProfileClick}
+            onSettingsClick={onSystemSettingsClick}
+          />
         </div>
       </div>
     </div>

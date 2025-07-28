@@ -12,6 +12,8 @@ interface VSCodeLayoutProps {
   activeView: 'active' | 'completed' | 'drawings' | 'workers' | 'dashboard' | 'settings';
   onViewChange: (view: 'active' | 'completed' | 'drawings' | 'workers' | 'dashboard' | 'settings') => void;
   onSearchClick?: () => void;
+  onSystemSettingsClick?: () => void;
+  onProfileClick?: () => void;
   className?: string;
 }
 
@@ -21,6 +23,8 @@ export const VSCodeLayout: React.FC<VSCodeLayoutProps> = ({
   activeView,
   onViewChange,
   onSearchClick,
+  onSystemSettingsClick,
+  onProfileClick,
   className = ''
 }) => {
   const { isMobile, isTablet, isDesktop } = useResponsive();
@@ -35,6 +39,8 @@ export const VSCodeLayout: React.FC<VSCodeLayoutProps> = ({
           activeView={activeView}
           onViewChange={onViewChange}
           onSearchClick={onSearchClick}
+          onSystemSettingsClick={onSystemSettingsClick}
+          onProfileClick={onProfileClick}
         />
         
         {/* 侧边栏 */}

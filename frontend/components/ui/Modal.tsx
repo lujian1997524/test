@@ -9,7 +9,7 @@ export interface ModalProps {
   onClose: () => void
   title?: string
   children: React.ReactNode
-  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full'
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | 'full'
   closable?: boolean
   maskClosable?: boolean
   footer?: React.ReactNode
@@ -32,6 +32,8 @@ export const Modal: React.FC<ModalProps> = ({
     md: 'max-w-lg',
     lg: 'max-w-2xl',
     xl: 'max-w-4xl',
+    '2xl': 'max-w-6xl',
+    '3xl': 'max-w-7xl max-h-[80vh]',
     full: 'max-w-[95vw] max-h-[95vh]'
   }
 
@@ -115,7 +117,7 @@ export const Modal: React.FC<ModalProps> = ({
               )}
               
               {/* 内容区域 */}
-              <div className="p-6">
+              <div className={`p-6 ${size === '3xl' ? 'max-h-[60vh] overflow-y-auto' : ''}`}>
                 {children}
               </div>
               

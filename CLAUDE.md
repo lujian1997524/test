@@ -236,6 +236,14 @@ window.addEventListener('materials-updated', () => {
 - 文件上传处理（图纸管理，存储在 `backend/uploads/drawings/`）
 - 使用Zustand进行客户端状态管理，通过自定义事件实现组件间通信
 
+#### 关键API端点
+- **部门管理**: `/api/departments` (GET/POST/PUT/DELETE) - 用于WorkersSidebar的部门CRUD操作
+- **工人管理**: `/api/workers` (GET/POST/PUT/DELETE) - 工人信息管理
+- **项目管理**: `/api/projects` - 项目CRUD和状态管理
+- **材料管理**: `/api/materials` - 板材状态切换和数据同步
+- **图纸管理**: `/api/drawings` - 文件上传和版本控制
+- **认证端点**: `/api/auth` - JWT认证和用户登录
+
 #### 专用开发页面
 - `/design-system` - UI组件展示和测试
 - `/api-test` - API接口测试工具
@@ -325,6 +333,24 @@ window.addEventListener('materials-updated', () => {
 
 ## 近期更新和已解决问题
 
+### 2025-07-28 最新更新记录
+1. **VS Code风格布局系统** - 完全重构了界面布局架构
+   - 实现了VS Code风格的活动栏（ActivityBar）+ 侧边栏（Sidebar）+ 主内容区布局
+   - 活动栏使用Heroicons图标，支持活跃项目、过往项目、图纸库、工人管理、仪表盘等视图切换
+   - 默认显示活跃项目侧边栏，图标选中状态优化了视觉效果
+   - 响应式设计，在桌面/平板/移动端都有适配
+
+2. **工人管理侧边栏** - 新增部门管理功能
+   - 创建了WorkersSidebar组件，支持部门的创建、编辑、删除操作
+   - 部门API使用 `/api/departments` 端点（不是 `/api/workers/departments`）
+   - 集成到主应用的VS Code布局中，通过活动栏切换到工人管理视图
+   - 支持管理员权限控制，只有admin用户可以管理部门
+
+3. **ActivityBar组件优化**
+   - 从文本按钮改为图标显示，大幅减少活动栏宽度（从192px到64px）
+   - 修复了选中状态的视觉问题，使用浅蓝色背景和蓝色图标提高可见性
+   - 支持搜索功能集成（Ctrl+K / Cmd+K快捷键）
+
 ### 2025-07-24 更新记录
 1. **完全弃用WebSocket** - 用户明确要求弃用WebSocket，因为"websocket 有点过于复杂了"
    - 实现了基于Zustand的轻量级状态管理方案
@@ -348,6 +374,9 @@ window.addEventListener('materials-updated', () => {
    - 处理后端包装响应格式的数据解析
 
 ### 系统当前状态
+- ✅ VS Code风格布局系统完全正常工作
+- ✅ ActivityBar活动栏图标导航正常
+- ✅ WorkersSidebar部门管理功能完全集成
 - ✅ Zustand状态管理正常工作
 - ✅ MaterialsTable 四状态切换功能完全正常
 - ✅ API认证和数据同步正常
@@ -371,9 +400,10 @@ window.addEventListener('materials-updated', () => {
 
 ## 完成的任务清单
 项目目前已经完成了以下主要功能：
+- ✅ VS Code风格界面布局（ActivityBar + Sidebar + MainContent）
 - ✅ 用户认证系统（基于姓名的简单登录）
 - ✅ 项目管理模块（CRUD操作）
-- ✅ 工人资料管理
+- ✅ 工人资料管理和部门管理（WorkersSidebar集成）
 - ✅ 四状态材料管理系统（empty → pending → in_progress → completed → empty）
 - ✅ 动态厚度规格配置
 - ✅ 图纸文件上传和版本控制
@@ -382,3 +412,34 @@ window.addEventListener('materials-updated', () => {
 - ✅ 数据库结构和关联关系
 - ✅ API认证和权限控制
 - ✅ Docker 容器化开发环境
+
+## 核心布局架构
+
+### VS Code风格布局系统
+系统使用VSCodeLayout作为主布局组件，包含三个核心区域：
+
+#### ActivityBar（活动栏）
+- 位置：最左侧，宽度64px
+- 功能：主要视图切换，使用@heroicons/react图标
+- 视图类型：`'active' | 'completed' | 'drawings' | 'workers' | 'dashboard' | 'settings'`
+- 组件：`/components/layout/ActivityBar.tsx`
+
+#### Sidebar（侧边栏）
+- 位置：活动栏右侧，宽度220px
+- 功能：根据当前视图显示对应的侧边栏内容
+- 动态渲染：通过renderSidebar()函数根据viewType切换不同组件
+- 主要侧边栏组件：
+  - ProjectTree - 活跃项目树形导航
+  - PastProjectsTree - 过往项目导航
+  - DrawingsSidebar - 图纸分类导航
+  - WorkersSidebar - 工人部门管理
+
+#### MainContent（主内容区）
+- 位置：侧边栏右侧，占据剩余空间
+- 功能：显示主要内容组件
+- 动画：使用Framer Motion的AnimatePresence实现视图切换动画
+
+### 关键布局组件
+- **`VSCodeLayout.tsx`** - 主布局容器，集成活动栏、侧边栏和主内容区
+- **`ActivityBar.tsx`** - 左侧活动栏，图标导航
+- **`useResponsive`** hook - 响应式检测，支持桌面/平板/移动端适配

@@ -689,7 +689,12 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const project = await Project.findByPk(id);
+    const project = await Project.findByPk(id, {
+      include: [{
+        model: Drawing,
+        as: 'drawings'
+      }]
+    });
 
     if (!project) {
       return res.status(404).json({
@@ -700,8 +705,32 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
     // 保存项目信息用于SSE事件和历史记录
     const projectInfo = {
       id: project.id,
-      name: project.name
+      name: project.name,
+      drawingCount: project.drawings ? project.drawings.length : 0
     };
+
+    // 删除项目相关的所有物理图纸文件
+    if (project.drawings && project.drawings.length > 0) {
+      const fs = require('fs').promises;
+      const path = require('path');
+      
+      console.log(`开始删除项目 ${id} 的 ${project.drawings.length} 个图纸文件...`);
+      
+      for (const drawing of project.drawings) {
+        if (drawing.filePath) {
+          const fullPath = path.join(__dirname, '../../uploads/drawings', path.basename(drawing.filePath));
+          try {
+            await fs.unlink(fullPath);
+            console.log(`已删除图纸文件: ${fullPath}`);
+          } catch (fileError) {
+            console.warn(`删除图纸文件失败: ${fullPath}`, fileError.message);
+            // 继续删除其他文件，不阻止整个删除过程
+          }
+        }
+      }
+      
+      console.log(`项目 ${id} 的图纸文件删除完成`);
+    }
 
     // 删除项目前，先删除相关的子记录以避免外键约束错误
     try {
@@ -718,17 +747,19 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
       // 继续执行，不阻止项目删除
     }
 
+    // 删除项目（这会通过级联删除自动删除材料和图纸记录）
     await project.destroy();
 
     // 记录操作历史（在删除成功后记录到其他地方或日志）
     try {
-      console.log(`项目删除成功: ${projectInfo.name} (ID: ${projectInfo.id}) 由用户 ${req.user.name} 删除`);
+      console.log(`项目删除成功: ${projectInfo.name} (ID: ${projectInfo.id}) 由用户 ${req.user.name} 删除，已删除 ${projectInfo.drawingCount} 个图纸`);
     } catch (historyError) {
       console.error('记录项目删除日志失败:', historyError);
     }
 
     res.json({
-      message: '项目删除成功'
+      message: '项目删除成功',
+      deletedDrawingsCount: projectInfo.drawingCount
     });
 
     // 发送SSE事件通知其他用户
@@ -737,10 +768,11 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
         projectId: projectInfo.id,
         projectName: projectInfo.name,
         userName: req.user.name,
-        userId: req.user.id
+        userId: req.user.id,
+        deletedDrawingsCount: projectInfo.drawingCount
       }, req.user.id);
       
-      console.log(`SSE事件已发送: 项目删除 - ${projectInfo.name}`);
+      console.log(`SSE事件已发送: 项目删除 - ${projectInfo.name} (包含 ${projectInfo.drawingCount} 个图纸)`);
     } catch (sseError) {
       console.error('发送SSE事件失败:', sseError);
     }
