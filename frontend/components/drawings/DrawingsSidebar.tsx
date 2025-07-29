@@ -18,6 +18,8 @@ interface DrawingsSidebarProps {
   selectedCategory: string;
   onCategoryChange: (category: string) => void;
   onRefresh?: () => void;
+  onUploadClick?: () => void;
+  onMobileItemClick?: () => void;
   className?: string;
 }
 
@@ -34,6 +36,8 @@ export const DrawingsSidebar: React.FC<DrawingsSidebarProps> = ({
   selectedCategory,
   onCategoryChange,
   onRefresh,
+  onUploadClick,
+  onMobileItemClick,
   className = ''
 }) => {
   const { token, user } = useAuth();
@@ -104,6 +108,7 @@ export const DrawingsSidebar: React.FC<DrawingsSidebarProps> = ({
   const handleRefresh = () => {
     fetchStats();
     onRefresh?.();
+    onMobileItemClick?.(); // 移动端自动收回侧边栏
   };
 
   // 分类数据
@@ -138,9 +143,9 @@ export const DrawingsSidebar: React.FC<DrawingsSidebarProps> = ({
   ];
 
   return (
-    <div className={`bg-white/80 backdrop-blur-xl border-r border-gray-200 ${className}`}>
+    <div className={`bg-white/80 backdrop-blur-xl border-r border-gray-200 flex flex-col h-full ${className}`}>
       {/* 标题区域 */}
-      <div className="px-3 py-2.5 border-b border-gray-200">
+      <div className="px-3 py-2.5 border-b border-gray-200 flex-shrink-0">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-text-primary text-sm">图纸库</h2>
           <div className="flex items-center space-x-1.5">
@@ -158,8 +163,8 @@ export const DrawingsSidebar: React.FC<DrawingsSidebarProps> = ({
                 className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 p-1.5"
                 size="sm"
                 onClick={() => {
-                  // 这里可以添加上传图纸的功能
-                  console.log('上传图纸功能');
+                  onUploadClick?.();
+                  onMobileItemClick?.(); // 移动端自动收回侧边栏
                 }}
               >
                 <PlusIcon className="w-4 h-4" />
@@ -170,7 +175,7 @@ export const DrawingsSidebar: React.FC<DrawingsSidebarProps> = ({
       </div>
 
       {/* 侧边栏树 */}
-      <div className="overflow-y-auto h-full">
+      <div className="flex-1 overflow-y-auto">
         {categories.map((group) => (
           <div key={group.key} className="border-b border-gray-100 last:border-b-0">
             {/* 分组标题 */}
@@ -215,7 +220,10 @@ export const DrawingsSidebar: React.FC<DrawingsSidebarProps> = ({
                         className="relative"
                       >
                         <Button
-                          onClick={() => onCategoryChange(item.key)}
+                          onClick={() => {
+                            onCategoryChange(item.key);
+                            onMobileItemClick?.(); // 通知移动端关闭侧边栏
+                          }}
                           variant="ghost"
                           className={`w-full px-6 py-2 flex items-center justify-between text-left transition-colors hover:bg-gray-50 h-auto ${
                             selectedCategory === item.key 

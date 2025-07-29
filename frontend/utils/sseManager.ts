@@ -189,8 +189,14 @@ class SSEManager {
 
       // 生成事件唯一标识符用于去重（使用事件类型+时间戳+数据的关键字段）
       let eventId: string;
-      if (eventType === 'project-status-changed' && eventData.data.project) {
-        eventId = `${eventType}-${eventData.data.project.id}-${eventData.timestamp}`;
+      if (eventType === 'project-status-changed') {
+        if (eventData.data.projectId) {
+          eventId = `${eventType}-${eventData.data.projectId}-${eventData.timestamp}`;
+        } else if (eventData.data.project?.id) {
+          eventId = `${eventType}-${eventData.data.project.id}-${eventData.timestamp}`;
+        } else {
+          eventId = `${eventType}-${eventData.timestamp}`;
+        }
       } else if (eventType === 'project-created' && eventData.data.project) {
         eventId = `${eventType}-${eventData.data.project.id}-${eventData.timestamp}`;
       } else if (eventType === 'project-deleted') {
@@ -237,6 +243,8 @@ class SSEManager {
 
   // 处理项目通知
   private handleProjectNotification(eventType: SSEEventType, data: any) {
+    console.log('🔔 处理项目通知:', { eventType, data });
+    
     let notification: NotificationMessage | null = null;
     const timestamp = Date.now();
 
@@ -254,13 +262,27 @@ class SSEManager {
 
       case 'project-status-changed':
         const statusText = this.getStatusText(data.newStatus);
+        const reasonText = data.reason ? ` (${data.reason})` : '';
+        const materialInfo = data.materialChanged 
+          ? ` - ${data.materialChanged.thicknessSpec} 从${this.getStatusText(data.materialChanged.oldStatus)}改为${this.getStatusText(data.materialChanged.newStatus)}`
+          : '';
+        
+        // 从项目对象或直接字段获取项目名称
+        const projectName = data.project?.name || data.projectName || '未知项目';
+        console.log('🏷️ 项目状态变更通知 - 获取项目名称:', {
+          projectName,
+          fromProject: data.project?.name,
+          fromDirect: data.projectName,
+          fullData: data
+        });
+        
         notification = {
-          id: `project-status-${data.project?.id}-${timestamp}`,
+          id: `project-status-${data.projectId}-${timestamp}`,
           type: data.newStatus === 'completed' ? 'success' : 'info',
-          title: '项目状态变更',
-          message: `${data.userName || '某用户'} 将项目 "${data.project?.name || '未知项目'}" 状态改为${statusText}`,
+          title: '项目状态自动更新',
+          message: `项目 "${projectName}" 状态从${this.getStatusText(data.oldStatus)}改为${statusText}${reasonText}${materialInfo}`,
           timestamp: new Date().toISOString(),
-          duration: 5000
+          duration: 6000 // 增加显示时间，因为信息更详细
         };
         break;
 
@@ -269,11 +291,14 @@ class SSEManager {
           ? ` (同时删除了 ${data.deletedDrawingsCount} 个图纸)`
           : '';
         
+        // 从项目对象或直接字段获取项目名称
+        const deletedProjectName = data.project?.name || data.projectName || '未知项目';
+        
         notification = {
           id: `project-deleted-${data.projectId}-${timestamp}`,
           type: 'warning',
           title: '项目已删除',
-          message: `${data.userName || '某用户'} 删除了项目 "${data.projectName || '未知项目'}"${drawingText}`,
+          message: `${data.userName || '某用户'} 删除了项目 "${deletedProjectName}"${drawingText}`,
           timestamp: new Date().toISOString(),
           duration: 8000 // 增加显示时间，因为信息更丰富
         };

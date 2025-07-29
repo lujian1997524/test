@@ -2,11 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Card, Button, SearchBar, Dropdown, Alert, Loading, EmptyData, Modal, Input } from '@/components/ui';
+import { Alert, Loading, EmptyData, Modal, Input, Dropdown, Button } from '@/components/ui';
 import { DrawingGrid } from './DrawingGrid';
 import { DrawingList } from './DrawingList';
 import { DrawingUpload } from './DrawingUpload';
-import { DrawingSearch } from './DrawingSearch';
 import { DxfPreviewModal } from '@/components/ui/DxfPreviewModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { cadFileHandler } from '@/utils/cadFileHandler';
@@ -43,25 +42,20 @@ export interface DrawingLibraryProps {
   className?: string;
   selectedCategory?: string;
   onCategoryChange?: (category: string) => void;
+  showUploadModal?: boolean;
+  onUploadModalChange?: (show: boolean) => void;
 }
-
-type ViewMode = 'grid' | 'list';
-type SortMode = 'name' | 'date' | 'size' | 'type';
 
 export const DrawingLibrary: React.FC<DrawingLibraryProps> = ({
   className = '',
   selectedCategory = 'all',
-  onCategoryChange
+  onCategoryChange,
+  showUploadModal = false,
+  onUploadModalChange
 }) => {
   const [drawings, setDrawings] = useState<Drawing[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
-  const [sortMode, setSortMode] = useState<SortMode>('name');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedDrawings, setSelectedDrawings] = useState<number[]>([]);
-  const [showUpload, setShowUpload] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [previewDrawing, setPreviewDrawing] = useState<Drawing | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -79,9 +73,7 @@ export const DrawingLibrary: React.FC<DrawingLibraryProps> = ({
     try {
       setLoading(true);
       const params = new URLSearchParams({
-        category: selectedCategory || 'all',
-        sortBy: sortMode,
-        sortOrder: 'DESC'
+        category: selectedCategory || 'all'
       });
       
       const response = await fetch(`/api/drawings?${params}`, {
@@ -237,7 +229,7 @@ export const DrawingLibrary: React.FC<DrawingLibraryProps> = ({
 
   useEffect(() => {
     fetchDrawings();
-  }, [token, selectedCategory, sortMode]);
+  }, [token, selectedCategory]);
 
   // 当分类改变时，通知父组件
   useEffect(() => {
@@ -246,23 +238,12 @@ export const DrawingLibrary: React.FC<DrawingLibraryProps> = ({
     }
   }, [selectedCategory, onCategoryChange]);
 
-  // 筛选和排序图纸（主要处理搜索，分类由后端处理）
-  const filteredDrawings = React.useMemo(() => {
-    let filtered = [...drawings];
-
-    // 搜索筛选
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(drawing => 
-        drawing.filename.toLowerCase().includes(query) ||
-        drawing.originalName.toLowerCase().includes(query) ||
-        drawing.description?.toLowerCase().includes(query) ||
-        drawing.tags?.some(tag => tag.toLowerCase().includes(query))
-      );
+  // 监听外部上传状态变化
+  useEffect(() => {
+    if (showUploadModal !== undefined) {
+      // 外部控制上传模态框显示状态
     }
-
-    return filtered;
-  }, [drawings, searchQuery]);
+  }, [showUploadModal]);
 
   // 按月份分组归档图纸
   const groupArchivedDrawingsByMonth = (drawings: Drawing[]) => {
@@ -295,7 +276,7 @@ export const DrawingLibrary: React.FC<DrawingLibraryProps> = ({
   // 处理图纸上传成功
   const handleUploadSuccess = () => {
     fetchDrawings();
-    setShowUpload(false);
+    onUploadModalChange?.(false);
     // 触发图纸更新事件
     window.dispatchEvent(new CustomEvent('drawing-updated'));
   };
@@ -355,136 +336,8 @@ export const DrawingLibrary: React.FC<DrawingLibraryProps> = ({
 
   return (
     <div className={`flex flex-col h-full ${className}`}>
-      {/* 工具栏 */}
-      <Card padding="sm" className="mb-4 bg-white/80 backdrop-blur-xl">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            {/* 视图切换 */}
-            <div className="flex items-center bg-gray-100 rounded-lg overflow-hidden">
-              <Button
-                variant={viewMode === 'grid' ? 'primary' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('grid')}
-                className="rounded-none"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                </svg>
-                网格
-              </Button>
-              <Button
-                variant={viewMode === 'list' ? 'primary' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('list')}
-                className="rounded-none"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                </svg>
-                列表
-              </Button>
-            </div>
-
-            {/* 排序 */}
-            <Dropdown
-              options={[
-                { label: '按名称排序', value: 'name' },
-                { label: '按时间排序', value: 'date' },
-                { label: '按大小排序', value: 'size' },
-                { label: '按类型排序', value: 'type' }
-              ]}
-              value={sortMode}
-              onChange={(value) => setSortMode(value as SortMode)}
-              className="w-32"
-            />
-          </div>
-
-          {/* 搜索栏 */}
-          <div className="flex-1 max-w-md">
-            <SearchBar
-              placeholder="搜索图纸..."
-              value={searchQuery}
-              onChange={setSearchQuery}
-              className="w-full"
-            />
-          </div>
-
-          {/* 操作按钮 */}
-          <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setShowSearch(!showSearch)}
-              className="flex items-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-              </svg>
-              高级筛选
-            </Button>
-            
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setShowUpload(true)}
-              className="flex items-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-              </svg>
-              上传图纸
-            </Button>
-          </div>
-        </div>
-
-        {/* 高级搜索面板 */}
-        {showSearch && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="mt-4 pt-4 border-t border-gray-200"
-          >
-            <DrawingSearch
-              onSearch={(filters) => {
-                // 处理高级搜索筛选
-                console.log('高级搜索筛选:', filters);
-              }}
-              onReset={() => {
-                setSearchQuery('');
-              }}
-            />
-          </motion.div>
-        )}
-      </Card>
-
-      {/* 批量操作工具栏 */}
-      {selectedDrawings.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-4"
-        >
-          <Card padding="sm" className="bg-blue-50 border-blue-200">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-blue-700">
-                已选择 {selectedDrawings.length} 个图纸
-              </span>
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm">批量关联</Button>
-                <Button variant="ghost" size="sm">修改状态</Button>
-                <Button variant="ghost" size="sm">添加标签</Button>
-                <Button variant="ghost" size="sm" className="text-red-600">
-                  批量删除
-                </Button>
-              </div>
-            </div>
-          </Card>
-        </motion.div>
-      )}
-
-      {/* 内容区域 */}
-      <div className="flex-1 overflow-hidden">
+      {/* 内容区域 - 移除所有工具栏 */}
+      <div className="flex-1 overflow-hidden p-4">
         {selectedCategory === 'archived' && archivedGroups.length > 0 ? (
           // 归档图纸按月份分组显示
           <div className="h-full overflow-auto">
@@ -504,60 +357,30 @@ export const DrawingLibrary: React.FC<DrawingLibraryProps> = ({
                 </div>
                 
                 {/* 该月份的图纸 */}
-                {viewMode === 'grid' ? (
-                  <DrawingGrid
-                    drawings={group.drawings}
-                    selectedDrawings={selectedDrawings}
-                    onSelectionChange={setSelectedDrawings}
-                    onPreview={handlePreview}
-                    onEdit={handleEdit}
-                    onDelete={handleDelete}
-                    onOpen={handleOpen}
-                    className="px-4"
-                  />
-                ) : (
-                  <DrawingList
-                    drawings={group.drawings}
-                    selectedDrawings={selectedDrawings}
-                    onSelectionChange={setSelectedDrawings}
-                    onPreview={handlePreview}
-                    onEdit={handleEdit}
-                    onDelete={handleDelete}
-                    onOpen={handleOpen}
-                    className="px-4"
-                  />
-                )}
+                <DrawingGrid
+                  drawings={group.drawings}
+                  onPreview={handlePreview}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onOpen={handleOpen}
+                  className="px-4"
+                />
               </div>
             ))}
           </div>
-        ) : filteredDrawings.length === 0 ? (
+        ) : drawings.length === 0 ? (
           <EmptyData
             title="暂无图纸"
-            description={searchQuery ? "没有找到匹配的图纸" : "还没有上传任何图纸"}
+            description="还没有上传任何图纸"
             action={
-              !searchQuery ? (
-                <Button variant="primary" onClick={() => setShowUpload(true)}>
-                  上传第一个图纸
-                </Button>
-              ) : undefined
+              <Button variant="primary" onClick={() => onUploadModalChange?.(true)}>
+                上传第一个图纸
+              </Button>
             }
           />
-        ) : viewMode === 'grid' ? (
-          <DrawingGrid
-            drawings={filteredDrawings}
-            selectedDrawings={selectedDrawings}
-            onSelectionChange={setSelectedDrawings}
-            onPreview={handlePreview}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            onOpen={handleOpen}
-            className="h-full"
-          />
         ) : (
-          <DrawingList
-            drawings={filteredDrawings}
-            selectedDrawings={selectedDrawings}
-            onSelectionChange={setSelectedDrawings}
+          <DrawingGrid
+            drawings={drawings}
             onPreview={handlePreview}
             onEdit={handleEdit}
             onDelete={handleDelete}
@@ -568,10 +391,10 @@ export const DrawingLibrary: React.FC<DrawingLibraryProps> = ({
       </div>
 
       {/* 上传对话框 */}
-      {showUpload && (
+      {showUploadModal && (
         <DrawingUpload
-          isOpen={showUpload}
-          onClose={() => setShowUpload(false)}
+          isOpen={showUploadModal}
+          onClose={() => onUploadModalChange?.(false)}
           onSuccess={handleUploadSuccess}
         />
       )}

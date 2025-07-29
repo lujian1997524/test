@@ -6,6 +6,8 @@ import LoginModal from '@/components/auth/LoginModal';
 import { ProjectTree } from '@/components/materials/ProjectTree';
 import { PastProjectsTree } from '@/components/projects/PastProjectsTree';
 import { MaterialsTable } from '@/components/materials/MaterialsTable';
+import { MaterialsCardView } from '@/components/materials/MaterialsCardView';
+import { PastProjectsCardView } from '@/components/projects/PastProjectsCardView';
 import { WorkerManagement } from '@/components/workers/WorkerManagement';
 import { WorkersSidebar } from '@/components/workers/WorkersSidebar';
 import { ProjectDetail } from '@/components/projects/ProjectDetail';
@@ -54,6 +56,8 @@ function HomeContent() {
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showSettingsPage, setShowSettingsPage] = useState(false);
   const [showUserProfileModal, setShowUserProfileModal] = useState(false);
+  const [showDrawingUpload, setShowDrawingUpload] = useState(false);
+  const [isSorting, setIsSorting] = useState(false);
   
   // 认证信息
   const { token, isAuthenticated, user, logout } = useAuth();
@@ -71,6 +75,36 @@ function HomeContent() {
   const { fetchMaterials } = useMaterialStore();
 
   // 获取图纸统计信息
+  // 批量排序功能
+  const handleBatchSort = async (reorderedItems: any[]) => {
+    try {
+      setIsSorting(true);
+      const projectIds = reorderedItems.map(item => item.id);
+      
+      const response = await fetch('/api/projects/reorder', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ projectIds }),
+      });
+
+      if (!response.ok) {
+        throw new Error('更新项目排序失败');
+      }
+
+      // 刷新项目数据
+      await fetchProjects();
+    } catch (error) {
+      console.error('更新项目排序失败:', error);
+      throw error;
+    } finally {
+      setIsSorting(false);
+    }
+  };
+
+  // 获取图纸统计信息  
   const fetchDrawingStats = async () => {
     if (!token) return;
     
@@ -265,6 +299,9 @@ function HomeContent() {
             onProjectSelect={handleSelectProject}
             onEditProject={openEditModal}
             onCreateProject={openCreateModal}
+            onMobileItemClick={() => {}} // 移动端点击项目时关闭侧边栏的占位
+            onBatchSort={handleBatchSort}
+            isSorting={isSorting}
             className="h-full"
           />
         );
@@ -274,6 +311,7 @@ function HomeContent() {
           <PastProjectsTree
             selectedProjectId={selectedProjectId}
             onProjectSelect={handleSelectProject}
+            onMobileItemClick={() => {}} // 移动端点击项目时关闭侧边栏的占位
             className="h-full"
           />
         );
@@ -284,6 +322,8 @@ function HomeContent() {
             selectedCategory={drawingCategory}
             onCategoryChange={setDrawingCategory}
             onRefresh={fetchDrawingStats}
+            onUploadClick={() => setShowDrawingUpload(true)}
+            onMobileItemClick={() => {}} // 移动端点击分类时关闭侧边栏的占位
             className="h-full"
           />
         );
@@ -293,6 +333,7 @@ function HomeContent() {
           <WorkersSidebar
             selectedDepartment={selectedDepartment}
             onDepartmentChange={setSelectedDepartment}
+            onMobileItemClick={() => {}} // 移动端点击部门时关闭侧边栏的占位
             onRefresh={() => {
               // 触发工人数据刷新事件
               window.dispatchEvent(new CustomEvent('refresh-workers'));
@@ -322,6 +363,10 @@ function HomeContent() {
       onSearchClick={() => setShowSearchModal(true)}
       onSystemSettingsClick={handleSystemSettingsClick}
       onProfileClick={handleProfileClick}
+      onMobileSidebarAutoClose={() => {
+        // 移动端侧边栏自动关闭时的回调，可以在这里添加额外逻辑
+        console.log('移动端侧边栏已自动关闭');
+      }}
       sidebar={renderSidebar()}
     >
       {/* 主内容区域 */}
@@ -351,7 +396,7 @@ function HomeContent() {
             <ProjectDetail
               projectId={selectedProjectId}
               onBack={() => handleSelectProject(null)}
-              className="h-full max-h-full"
+              className="h-full"
             />
           </motion.div>
         ) : viewType === 'drawings' ? (
@@ -366,24 +411,54 @@ function HomeContent() {
               className="h-full"
               selectedCategory={drawingCategory}
               onCategoryChange={setDrawingCategory}
+              showUploadModal={showDrawingUpload}
+              onUploadModalChange={setShowDrawingUpload}
             />
           </motion.div>
-        ) : (
+        ) : viewType === 'completed' ? (
           <motion.div
-            key={`materials-table-${viewType}`}
+            key="past-projects-card-view"
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
           >
-            <MaterialsTable
+            <PastProjectsCardView
               selectedProjectId={selectedProjectId}
               onProjectSelect={handleSelectProject}
-              viewType={viewType as 'active' | 'completed'}
+              className="h-full overflow-y-auto"
+            />
+          </motion.div>
+        ) : viewType === 'active' ? (
+          <motion.div
+            key="active-projects-card-view"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+          >
+            <MaterialsCardView
+              selectedProjectId={selectedProjectId}
+              onProjectSelect={handleSelectProject}
+              viewType="active"
               workerNameFilter={workerNameFilter}
               thicknessFilter={thicknessFilter}
-              className="h-full"
+              className="h-full overflow-y-auto"
             />
+          </motion.div>
+        ) : (
+          <motion.div
+            key={`fallback-view-${viewType}`}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+          >
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center text-gray-500">
+                <p className="text-lg">页面加载中...</p>
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

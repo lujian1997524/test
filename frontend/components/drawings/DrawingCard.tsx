@@ -85,24 +85,19 @@ export const DrawingCard: React.FC<DrawingCardProps> = ({
           </div>
         )}
 
-        {/* 文件图标和缩略图区域 */}
-        <div className="flex items-center justify-center h-24 mb-3 bg-gray-50 rounded-lg">
-          {getFileTypeIcon(drawing.fileType)}
-        </div>
-
-        {/* 文件信息 */}
-        <div className="space-y-2">
+        {/* 文件信息区域 - 移除图标，简化设计 */}
+        <div className="space-y-3">
           {/* 文件名 */}
           <Tooltip content={drawing.originalName}>
-            <h3 className="font-medium text-sm text-gray-900 truncate">
+            <h3 className="font-medium text-base text-gray-900 truncate">
               {drawing.originalName}
             </h3>
           </Tooltip>
 
           {/* 版本和状态 */}
           <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-500">
-              v{drawing.version}
+            <span className="text-sm text-gray-500">
+              版本 {drawing.version}
             </span>
             <Badge
               variant={getStatusVariant(drawing.status)}
@@ -112,56 +107,39 @@ export const DrawingCard: React.FC<DrawingCardProps> = ({
             </Badge>
           </div>
 
-          {/* 文件类型和大小 */}
-          <div className="flex items-center justify-between text-xs text-gray-500">
-            <span>{drawing.fileType}</span>
+          {/* 文件信息 */}
+          <div className="flex items-center justify-between text-sm text-gray-500">
+            <span>DXF 文件</span>
             <span>{formatFileSize(drawing.fileSize)}</span>
           </div>
 
           {/* 项目关联信息 */}
           {drawing.project ? (
-            <div className="text-xs text-blue-600">
-              关联项目：{drawing.project.name}
+            <div className="text-sm text-blue-600 bg-blue-50 px-2 py-1 rounded">
+              关联：{drawing.project.name}
             </div>
           ) : drawing.projectIds && drawing.projectIds.length > 0 ? (
-            <div className="text-xs text-blue-600">
+            <div className="text-sm text-blue-600 bg-blue-50 px-2 py-1 rounded">
               关联 {drawing.projectIds.length} 个项目
             </div>
-          ) : null}
-
-          {/* 标签 */}
-          {drawing.tags && drawing.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {drawing.tags.slice(0, 2).map((tag, index) => (
-                <Badge
-                  key={index}
-                  variant="secondary"
-                  size="sm"
-                  className="text-xs"
-                >
-                  {tag}
-                </Badge>
-              ))}
-              {drawing.tags.length > 2 && (
-                <Badge variant="secondary" size="sm" className="text-xs">
-                  +{drawing.tags.length - 2}
-                </Badge>
-              )}
+          ) : (
+            <div className="text-sm text-gray-500">
+              未关联项目
             </div>
           )}
 
           {/* 描述（如果有） */}
           {drawing.description && (
             <Tooltip content={drawing.description}>
-              <p className="text-xs text-gray-600 truncate">
+              <p className="text-sm text-gray-600 truncate bg-gray-50 px-2 py-1 rounded">
                 {drawing.description}
               </p>
             </Tooltip>
           )}
 
           {/* 时间信息 */}
-          <div className="text-xs text-gray-400">
-            {new Date(drawing.updatedAt).toLocaleDateString()}
+          <div className="text-xs text-gray-400 pt-2 border-t border-gray-100">
+            {new Date(drawing.updatedAt).toLocaleDateString('zh-CN')}
           </div>
         </div>
 

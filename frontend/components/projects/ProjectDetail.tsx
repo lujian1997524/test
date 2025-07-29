@@ -4,8 +4,9 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjectStore, type ProjectState } from '@/stores';
-import { StatusToggle, CADPreview, DxfPreviewModal, Card, Input, Loading } from '@/components/ui';
+import { StatusToggle, CADPreview, DxfPreviewModal, Card, Input, Loading, VerticalTimeline } from '@/components/ui';
 import type { StatusType } from '@/components/ui';
+import { ProjectDetailCard } from '@/components/projects/ProjectCard';
 import cadFileHandler from '@/utils/cadFileHandler';
 import { 
   updateMaterialStatusShared, 
@@ -177,6 +178,72 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
     }
   };
 
+  // 转换操作历史为Timeline格式
+  const convertHistoryToTimeline = () => {
+    return operationHistory.map(record => {
+      let status: 'success' | 'error' | 'warning' | 'info' | 'pending' = 'info';
+      let icon: React.ReactNode = null;
+      
+      // 根据操作类型设置状态和图标
+      switch (record.operationType) {
+        case 'material_update':
+          status = 'success';
+          icon = (
+            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+          );
+          break;
+        case 'drawing_upload':
+          status = 'info';
+          icon = (
+            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+          );
+          break;
+        case 'project_create':
+          status = 'success';
+          icon = (
+            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+          );
+          break;
+        case 'project_update':
+          status = 'warning';
+          icon = (
+            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          );
+          break;
+        case 'project_delete':
+          status = 'error';
+          icon = (
+            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          );
+          break;
+      }
+
+      return {
+        id: record.id.toString(),
+        title: record.operationDescription,
+        description: getOperationDetailsText(record),
+        timestamp: record.created_at,
+        icon,
+        status,
+        content: (
+          <div className="text-xs text-gray-500">
+            <span>{record.operator.name}</span>
+          </div>
+        )
+      };
+    });
+  };
+
   // 获取项目详情
   const fetchProjectDetail = async () => {
     try {
@@ -279,15 +346,56 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
   };
 
   // 更新材料状态 - 使用共享逻辑
-  const updateMaterialStatus = async (thicknessSpecId: number, newStatus: StatusType) => {
-    return await updateMaterialStatusShared(projectId, thicknessSpecId, newStatus, {
-      projects: projects as any[],
-      thicknessSpecs,
-      user,
-      updateProjectFn: updateProject,
-      fetchProjectsFn: fetchProjects,
-      setLoadingFn: setLoading,
-    });
+  const updateMaterialStatus = async (materialId: number, newStatus: StatusType) => {
+    if (!token || !user) return;
+
+    try {
+      setLoading(true);
+      
+      // 找到材料对应的厚度规格ID
+      let targetThicknessSpecId: number | undefined;
+      
+      if (project) {
+        const material = project.materials.find(m => m.id === materialId);
+        if (material) {
+          targetThicknessSpecId = material.thicknessSpecId;
+        }
+      }
+      
+      if (!targetThicknessSpecId) {
+        console.error('无法找到材料对应的厚度规格ID');
+        alert('无法找到材料信息');
+        return;
+      }
+
+      console.log('使用共享函数更新材料状态:', { projectId, targetThicknessSpecId, newStatus });
+
+      // 使用与MaterialsTable相同的共享函数
+      const success = await updateMaterialStatusShared(projectId, targetThicknessSpecId, newStatus, {
+        projects: projects as any[],
+        thicknessSpecs: thicknessSpecs,
+        user,
+        updateProjectFn: updateProject,
+        fetchProjectsFn: fetchProjects,
+        setLoadingFn: setLoading,
+      });
+      
+      if (success) {
+        // 刷新项目详情
+        await fetchProjectDetail();
+        // 触发材料更新事件
+        window.dispatchEvent(new CustomEvent('materials-updated'));
+        console.log('材料状态更新成功');
+      } else {
+        console.error('材料状态更新失败');
+        alert('材料状态更新失败');
+      }
+    } catch (error) {
+      console.error('更新材料状态失败:', error);
+      alert(`更新材料状态失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    } finally {
+      setLoading(false);  
+    }
   };
 
   // 获取项目的材料状态（根据厚度规格ID）- 使用共享逻辑
@@ -450,7 +558,7 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
   return (
     <div 
       className={`bg-white/80 backdrop-blur-xl rounded-2xl border border-gray-200 shadow-lg overflow-hidden flex flex-col ${className}`}
-      style={{ maxHeight: 'calc(100vh - 120px)' }} // 明确限制最大高度，为顶部标题栏和底部间距预留空间
+      style={{ height: 'calc(100% - 0.5rem)' }}
     >
       {/* 标题栏 */}
       <div className="p-6 border-b border-gray-200 flex-shrink-0">
@@ -480,7 +588,10 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
           
           <div className="flex items-center space-x-2">
             <button
-              onClick={() => window.location.reload()}
+              onClick={() => {
+                fetchProjectDetail();
+                fetchOperationHistory();
+              }}
               className="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm"
             >
               刷新
@@ -489,181 +600,29 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
         </div>
       </div>
 
-      {/* 内容区域 - 确保正确处理父容器的padding约束 */}
+      {/* 内容区域 - 保留原有功能，优化布局 */}
       <div className="flex-1 overflow-auto min-h-0">
-        <div className="space-y-8 p-6">
-          {/* 基本信息部分 */}
-          <div className="bg-gray-50 rounded-lg p-6">
-            <h3 className="text-xl font-semibold mb-4 text-gray-900">基本信息</h3>
-            <div className="grid grid-cols-3 gap-6">
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-500">项目名称</label>
-                  <p className="text-lg font-medium text-gray-900">{project.name}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">分配工人</label>
-                  <p className="text-lg font-medium text-gray-900">{project.assignedWorker?.name || '未分配'}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">创建者</label>
-                  <p className="text-lg font-medium text-gray-900">{project.creator?.name || '未知'}</p>
-                </div>
-              </div>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-500">创建时间</label>
-                  <p className="text-lg font-medium text-gray-900">{new Date(project.createdAt).toLocaleString('zh-CN')}</p>
-                </div>
-                {project.startDate && (
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">开始时间</label>
-                    <p className="text-lg font-medium text-gray-900">{new Date(project.startDate).toLocaleDateString('zh-CN')}</p>
-                  </div>
-                )}
-                {project.endDate && (
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">计划完成时间</label>
-                    <p className="text-lg font-medium text-gray-900">{new Date(project.endDate).toLocaleDateString('zh-CN')}</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-4">
-                {/* 快速统计 */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-blue-50 rounded-lg p-3 text-center">
-                    <div className="text-xl font-bold text-blue-600">{thicknessSpecs.length}</div>
-                    <div className="text-xs text-gray-600">材料类型</div>
-                  </div>
-                  <div className="bg-green-50 rounded-lg p-3 text-center">
-                    <div className="text-xl font-bold text-green-600">
-                      {project.materials.filter(m => m.status === 'completed').length}
-                    </div>
-                    <div className="text-xs text-gray-600">已完成</div>
-                  </div>
-                  <div className="bg-orange-50 rounded-lg p-3 text-center">
-                    <div className="text-xl font-bold text-orange-600">
-                      {project.materials.filter(m => m.status === 'in_progress').length}
-                    </div>
-                    <div className="text-xs text-gray-600">进行中</div>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-3 text-center">
-                    <div className="text-xl font-bold text-gray-600">{project.drawings.length}</div>
-                    <div className="text-xs text-gray-600">图纸数量</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            {project.description && (
-              <div className="mt-6">
-                <label className="text-sm font-medium text-gray-500">项目描述</label>
-                <p className="mt-2 text-gray-900">{project.description}</p>
-              </div>
-            )}
-          </div>
-
-          {/* 材料状态表格 - 使用与主页面相同的样式 */}
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-            <div className="p-6 border-b border-gray-200">
-              <h3 className="text-xl font-semibold text-gray-900">材料状态管理</h3>
-              <p className="text-sm text-gray-600 mt-1">点击状态指示器可以切换材料完成状态</p>
-            </div>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">序号</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">项目名</th>
-                    {/* 厚度列 */}
-                    {thicknessSpecs.map(spec => (
-                      <th key={spec.id} className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        {spec.thickness}{spec.unit}
-                      </th>
-                    ))}
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">备注</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">开始时间</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">完成时间</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">图纸</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="hover:bg-gray-50">
-                    {/* 序号 */}
-                    <td className="px-4 py-4">
-                      <div className="text-sm font-medium text-gray-900">1</div>
-                    </td>
-                    
-                    {/* 项目名 */}
-                    <td className="px-4 py-4">
-                      <div className="font-medium text-gray-900">{project.name}</div>
-                      <div className="text-xs flex items-center space-x-1">
-                        <span className="text-gray-500">{getStatusText(project.status)}</span>
-                        <span className="text-gray-500">•</span>
-                        <span className={`w-3 h-3 rounded-full ${getPriorityColorBadge(project.priority)}`} title={`${getPriorityText(project.priority)}优先级`}></span>
-                        <span className="text-gray-500">•</span>
-                        <span className="text-gray-500">{project.assignedWorker?.name || '未分配'}</span>
-                      </div>
-                    </td>
-                    
-                    {/* 厚度状态列 */}
-                    {thicknessSpecs.map(spec => {
-                      const materialStatus = getProjectMaterialStatusForUI(spec.id);
-                      
-                      return (
-                        <td key={spec.id} className="px-3 py-4 text-center">
-                          <StatusToggle
-                            status={materialStatus}
-                            onChange={(newStatus) => {
-                              updateMaterialStatus(spec.id, newStatus);
-                            }}
-                            size="md"
-                          />
-                        </td>
-                      );
-                    })}
-                    
-                    {/* 备注 */}
-                    <td className="px-4 py-4">
-                      <div className="text-sm text-gray-900 max-w-32 truncate">
-                        {project.materials.length > 0 ? (project.materials[0]?.notes || '-') : '-'}
-                      </div>
-                    </td>
-                    
-                    {/* 开始时间 */}
-                    <td className="px-4 py-4">
-                      <div className="text-sm text-gray-900">
-                        {project.materials.length > 0 ? (project.materials[0]?.startDate || '-') : '-'}
-                      </div>
-                    </td>
-                    
-                    {/* 完成时间 */}
-                    <td className="px-4 py-4">
-                      <div className="text-sm text-gray-900">
-                        {project.materials.length > 0 ? (project.materials[0]?.completedDate || '-') : '-'}
-                      </div>
-                    </td>
-                    
-                    {/* 图纸 */}
-                    <td className="px-4 py-4">
-                      <div className="flex items-center space-x-1">
-                        {project.drawings && project.drawings.length > 0 ? (
-                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                            {project.drawings.length}个
-                          </span>
-                        ) : (
-                          <span className="text-xs text-gray-500">无</span>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
+        <div className="space-y-6 p-6">
+          {/* 使用新的卡片组件展示材料状态 */}
+          <ProjectDetailCard
+            project={{
+              id: project.id,
+              name: project.name,
+              status: project.status,
+              priority: project.priority,
+              assignedWorker: project.assignedWorker,
+              materials: project.materials || [],
+              drawings: project.drawings || [],
+              createdAt: project.createdAt
+            }}
+            onEdit={() => {
+              console.log('编辑项目:', project.id);
+            }}
+            onManageDrawings={() => {
+              console.log('管理图纸:', project.id);
+            }}
+            onMaterialStatusChange={updateMaterialStatus}
+          />
 
           {/* 项目备注区域 */}
           <Card className="bg-white border border-gray-200 shadow-sm" padding="none">
@@ -813,32 +772,21 @@ export const ProjectDetail: React.FC<ProjectDetailProps> = ({
             </div>
             
             <div className="p-6">
-              <div className="space-y-4">
-                {operationHistory.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <svg className="w-12 h-12 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <p className="text-lg">暂无操作历史</p>
-                    <p className="text-sm text-gray-400 mt-1">项目的操作记录会显示在这里</p>
-                  </div>
-                ) : (
-                  operationHistory.map(record => (
-                    <div key={record.id} className="flex items-start space-x-4 p-4 bg-gray-50 rounded-lg">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                      <div className="flex-1">
-                        <div className="font-medium text-gray-900">{record.operationDescription}</div>
-                        <div className="text-sm text-gray-600 mt-1">
-                          {getOperationDetailsText(record)}
-                        </div>
-                        <div className="text-xs text-gray-500 mt-2">
-                          {record.operator.name} • {new Date(record.created_at).toLocaleString('zh-CN')}
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+              {operationHistory.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <svg className="w-12 h-12 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-lg">暂无操作历史</p>
+                  <p className="text-sm text-gray-400 mt-1">项目的操作记录会显示在这里</p>
+                </div>
+              ) : (
+                <VerticalTimeline
+                  items={convertHistoryToTimeline()}
+                  size="sm"
+                  className="max-h-96 overflow-y-auto"
+                />
+              )}
             </div>
           </div>
         </div>

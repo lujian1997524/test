@@ -4,7 +4,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjectStore } from '@/stores';
-import { useDialog, Button, Loading } from '@/components/ui';
+import { useDialog, Button, Loading, BatchSortModal } from '@/components/ui';
+import { ArrowsUpDownIcon } from '@heroicons/react/24/outline';
 
 interface Project {
   id: number;
@@ -28,6 +29,10 @@ interface ProjectTreeProps {
   className?: string;
   // 筛选参数
   filteredProjects?: Project[];
+  onMobileItemClick?: () => void;
+  // 排序功能
+  onBatchSort?: (reorderedItems: any[]) => Promise<void>;
+  isSorting?: boolean;
 }
 
 export const ProjectTree: React.FC<ProjectTreeProps> = ({
@@ -39,9 +44,28 @@ export const ProjectTree: React.FC<ProjectTreeProps> = ({
   onRefresh,
   refreshTrigger = 0,
   className = '',
-  filteredProjects
+  filteredProjects,
+  onMobileItemClick,
+  onBatchSort,
+  isSorting = false
 }) => {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['all', 'pending']));
+  const [showSortModal, setShowSortModal] = useState(false);
+  
+  // 排序功能处理
+  const openSortModal = () => {
+    setShowSortModal(true);
+  };
+
+  const closeSortModal = () => {
+    setShowSortModal(false);
+  };
+
+  const handleBatchSort = async (reorderedItems: any[]) => {
+    if (onBatchSort) {
+      await onBatchSort(reorderedItems);
+    }
+  };
   
   // 使用Dialog组件 - 正确定位
   const { alert, confirm, DialogRenderer } = useDialog();
@@ -182,23 +206,42 @@ export const ProjectTree: React.FC<ProjectTreeProps> = ({
   }
 
   return (
-    <div className={`bg-white/80 backdrop-blur-xl border-r border-gray-200 ${className}`}>
+    <div className={`bg-white/80 backdrop-blur-xl border-r border-gray-200 flex flex-col h-full ${className}`}>
       {/* 标题区域 */}
-      <div className="px-4 py-3 border-b border-gray-200">
+      <div className="px-4 py-3 border-b border-gray-200 flex-shrink-0">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-text-primary text-sm">项目列表</h2>
-          <Button
-            onClick={onCreateProject}
-            className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
-            size="sm"
-          >
-            + 新建
-          </Button>
+          <div className="flex items-center space-x-2">
+            {/* 排序按钮 */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={openSortModal}
+              disabled={isSorting || !onBatchSort || (filteredProjects && filteredProjects.length === 0)}
+              className="flex items-center space-x-1"
+              title="调整项目排序"
+            >
+              <ArrowsUpDownIcon className="w-3 h-3" />
+              <span>{isSorting ? '处理中...' : '排序'}</span>
+            </Button>
+            
+            {/* 新建项目按钮 */}
+            <Button
+              onClick={() => {
+                onCreateProject?.();
+                onMobileItemClick?.(); // 移动端自动收回侧边栏
+              }}
+              className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
+              size="sm"
+            >
+              + 新建
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* 项目树 */}
-      <div className="overflow-y-auto h-full">
+      <div className="flex-1 overflow-y-auto">
         {groups.map((group) => (
           <div key={group.key} className="border-b border-gray-100 last:border-b-0">
             {/* 分组标题 */}
@@ -242,7 +285,10 @@ export const ProjectTree: React.FC<ProjectTreeProps> = ({
                       {group.projects.map((project) => (
                         <motion.div
                           key={project.id}
-                          onClick={() => onProjectSelect(project.id)}
+                          onClick={() => {
+                            onProjectSelect(project.id);
+                            onMobileItemClick?.(); // 通知移动端关闭侧边栏
+                          }}
                           className={`group w-full px-4 py-2 mx-2 rounded-lg cursor-pointer transition-all duration-200 ${
                             selectedProjectId === project.id
                               ? 'bg-blue-500 text-white shadow-md'
@@ -314,6 +360,20 @@ export const ProjectTree: React.FC<ProjectTreeProps> = ({
           </div>
         ))}
       </div>
+
+      {/* 批量排序模态框 */}
+      <BatchSortModal
+        isOpen={showSortModal}
+        onClose={closeSortModal}
+        items={(filteredProjects || projects).map((project, index) => ({
+          id: project.id,
+          name: project.name,
+          currentPosition: index + 1
+        }))}
+        onSave={handleBatchSort}
+        title="调整项目排序"
+      />
+      
       <DialogRenderer />
     </div>
   );

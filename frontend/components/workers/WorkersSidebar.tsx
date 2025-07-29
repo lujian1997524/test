@@ -22,6 +22,7 @@ interface WorkersSidebarProps {
   selectedDepartment: string;
   onDepartmentChange: (department: string) => void;
   onRefresh?: () => void;
+  onMobileItemClick?: () => void;
   className?: string;
 }
 
@@ -29,6 +30,7 @@ export const WorkersSidebar: React.FC<WorkersSidebarProps> = ({
   selectedDepartment,
   onDepartmentChange,
   onRefresh,
+  onMobileItemClick,
   className = ''
 }) => {
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -187,6 +189,7 @@ export const WorkersSidebar: React.FC<WorkersSidebarProps> = ({
   const openCreateModal = () => {
     setFormData({ name: '' });
     setShowCreateModal(true);
+    onMobileItemClick?.(); // 移动端自动收回侧边栏
   };
 
   useEffect(() => {
@@ -221,9 +224,9 @@ export const WorkersSidebar: React.FC<WorkersSidebarProps> = ({
   }
 
   return (
-    <div className={`h-full bg-white/80 backdrop-blur-xl p-4 ${className}`}>
+    <div className={`h-full bg-white/80 backdrop-blur-xl p-4 flex flex-col ${className}`}>
       {/* 标题和创建按钮 */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <h3 className="font-semibold text-gray-900 flex items-center">
           <BuildingOfficeIcon className="w-5 h-5 mr-2" />
           部门管理
@@ -241,10 +244,13 @@ export const WorkersSidebar: React.FC<WorkersSidebarProps> = ({
       </div>
 
       {/* 部门列表 */}
-      <div className="space-y-1">
+      <div className="space-y-1 flex-1 overflow-y-auto">
         {/* 全部工人 */}
         <button
-          onClick={() => onDepartmentChange('all')}
+          onClick={() => {
+            onDepartmentChange('all');
+            onMobileItemClick?.(); // 通知移动端关闭侧边栏
+          }}
           className={`
             w-full flex items-center justify-between p-2.5 rounded-lg text-left transition-colors
             ${selectedDepartment === 'all' 
@@ -271,7 +277,10 @@ export const WorkersSidebar: React.FC<WorkersSidebarProps> = ({
             className="group relative"
           >
             <button
-              onClick={() => onDepartmentChange(department.name)}
+              onClick={() => {
+                onDepartmentChange(department.name);
+                onMobileItemClick?.(); // 通知移动端关闭侧边栏
+              }}
               className={`
                 w-full flex items-center justify-between p-2.5 rounded-lg text-left transition-colors pr-16
                 ${selectedDepartment === department.name 

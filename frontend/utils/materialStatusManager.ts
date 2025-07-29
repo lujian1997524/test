@@ -121,7 +121,7 @@ export const calculateProjectStatusRealtime = (
  */
 export const updateProjectStatusRealtime = async (
   projects: Project[],
-  updateProjectFn: (projectId: number, updates: { status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }) => Promise<any>,
+  updateProjectFn: (projectId: number, updates: { status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }, options?: { silent?: boolean }) => Promise<any>,
   thicknessSpecs: ThicknessSpec[],
   projectId: number, 
   changedThicknessSpecId: number, 
@@ -136,18 +136,28 @@ export const updateProjectStatusRealtime = async (
     console.log(`项目 ${projectId} 状态变更: ${currentProject.status} → ${newStatus}`);
     
     try {
-      await updateProjectFn(projectId, { status: newStatus as 'pending' | 'in_progress' | 'completed' | 'cancelled' });
-      console.log(`项目 ${projectId} 状态更新成功`);
+      await updateProjectFn(projectId, { status: newStatus as 'pending' | 'in_progress' | 'completed' | 'cancelled' }, { silent: true });
+      console.log(`项目 ${projectId} 状态更新成功（静默模式）`);
       
       // 发送项目状态变更通知
-      const project = projects.find(p => p.id === projectId);
-      if (project) {
+      if (currentProject) {
+        console.log('🔔 发送项目状态变更通知:', {
+          projectId,
+          projectName: currentProject.name,
+          oldStatus: currentProject.status,
+          newStatus,
+          workerName: currentProject.assignedWorker?.name,
+          currentProjectData: currentProject
+        });
+        
         await notificationManager.showProjectStatusNotification(
-          project.name,
+          currentProject.name, // 直接使用currentProject的名称
           currentProject.status,
           newStatus,
-          project.assignedWorker?.name
+          currentProject.assignedWorker?.name
         );
+      } else {
+        console.error('⚠️ 找不到项目信息，无法发送通知:', { projectId, projectsLength: projects.length });
       }
       
       // 如果项目状态变为已完成，自动归档相关图纸
@@ -194,7 +204,7 @@ export const updateMaterialStatusShared = async (
     projects: Project[];
     thicknessSpecs: ThicknessSpec[];
     user: { id: number; name: string } | null;
-    updateProjectFn: (projectId: number, updates: { status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }) => Promise<any>;
+    updateProjectFn: (projectId: number, updates: { status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }, options?: { silent?: boolean }) => Promise<any>;
     fetchProjectsFn: () => Promise<void>;
     setLoadingFn?: (loading: boolean) => void;
   }
@@ -202,6 +212,11 @@ export const updateMaterialStatusShared = async (
   const { projects, thicknessSpecs, user, updateProjectFn, fetchProjectsFn, setLoadingFn } = options;
   
   console.log(`🎯 材料状态更新开始: 项目${projectId}, 厚度规格${thicknessSpecId}, 新状态${newStatus}`);
+  console.log('🖼️ 传入的项目数据:', {
+    projectsCount: projects.length,
+    targetProject: projects.find(p => p.id === projectId),
+    allProjectNames: projects.map(p => ({ id: p.id, name: p.name }))
+  });
   
   try {
     setLoadingFn?.(true);
@@ -236,20 +251,17 @@ export const updateMaterialStatusShared = async (
           return false;
         }
       }
-      // 成功删除或本来就没有记录，更新项目状态并刷新本地数据
+      // 成功删除或本来就没有记录，更新项目状态
       await updateProjectStatusRealtime(projects, updateProjectFn, thicknessSpecs, projectId, thicknessSpecId, 'empty');
       
-      // 立即刷新项目数据以更新本地UI
-      console.log('🔄 删除材料后立即刷新项目数据以更新本地UI');
-      await fetchProjectsFn();
-      
       // 发送材料更新事件，保持组件间同步
+      const eventTimestamp = Date.now();
       window.dispatchEvent(new CustomEvent('materials-updated', { 
         detail: { 
           projectId, 
           thicknessSpecId, 
           newStatus: 'empty',
-          timestamp: Date.now()
+          timestamp: eventTimestamp
         } 
       }));
       
@@ -319,17 +331,14 @@ export const updateMaterialStatusShared = async (
     // 成功更新或创建后，项目状态会通过SSE事件自动更新
     await updateProjectStatusRealtime(projects, updateProjectFn, thicknessSpecs, projectId, thicknessSpecId, newStatus);
     
-    // 立即刷新项目数据以更新本地UI
-    console.log('🔄 立即刷新项目数据以更新本地UI');
-    await fetchProjectsFn();
-    
     // 发送材料更新事件，保持组件间同步
+    const eventTimestamp = Date.now();
     window.dispatchEvent(new CustomEvent('materials-updated', { 
       detail: { 
         projectId, 
         thicknessSpecId, 
         newStatus,
-        timestamp: Date.now()
+        timestamp: eventTimestamp
       } 
     }));
     

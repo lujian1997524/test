@@ -195,14 +195,45 @@ export const MaterialsTable = ({
 
   // 监听材料更新事件，刷新项目数据
   useEffect(() => {
+    let debounceTimeout: NodeJS.Timeout | null = null;
+    let lastProcessedTimestamp = 0;
+    
     const handleMaterialsUpdate = (event: CustomEvent) => {
-      // 刷新项目数据以获取最新的材料状态
-      fetchProjects();
+      const eventDetail = event.detail;
+      const eventTimestamp = eventDetail?.timestamp || Date.now();
+      
+      // 如果事件来自SSE，则跳过处理（因为Store层已经处理了）
+      if (eventDetail?.fromSSE) {
+        console.log('⏭️ MaterialsTable跳过SSE事件（已由SSE处理器处理）');
+        return;
+      }
+      
+      // 防止重复处理相同的事件
+      if (eventTimestamp <= lastProcessedTimestamp) {
+        console.log('⏭️ MaterialsTable跳过重复事件');
+        return;
+      }
+      
+      lastProcessedTimestamp = eventTimestamp;
+      
+      // 清除之前的防抖定时器
+      if (debounceTimeout) {
+        clearTimeout(debounceTimeout);
+      }
+      
+      // 防抖延迟刷新，避免与Store层冲突
+      debounceTimeout = setTimeout(() => {
+        console.log('🔄 MaterialsTable层刷新项目数据...');
+        fetchProjects();
+      }, 1000); // 更长的防抖时间，让Store层先处理
     };
 
     window.addEventListener('materials-updated', handleMaterialsUpdate as EventListener);
     
     return () => {
+      if (debounceTimeout) {
+        clearTimeout(debounceTimeout);
+      }
       window.removeEventListener('materials-updated', handleMaterialsUpdate as EventListener);
     };
   }, [fetchProjects]);

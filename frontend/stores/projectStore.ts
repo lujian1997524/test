@@ -29,6 +29,7 @@ export interface ProjectState {
   createdBy: number;
   createdAt: string;
   updatedAt: string;
+  description?: string; // 项目描述/备注
   // 扩展属性
   assignedWorker?: {
     id: number;
@@ -74,13 +75,16 @@ export interface ProjectStore {
   lastUpdated: number;
   sseListenersSetup: boolean;
   _sseHandlers?: { [key: string]: (data: any) => void };
+  
+  // 乐观更新标记
+  isOptimisticUpdating: boolean;
 
   // 操作方法
   fetchProjects: () => Promise<void>;
   fetchCompletedProjects: (workerName?: string) => Promise<void>;
   fetchPastProjects: (year?: number, month?: number) => Promise<void>;
   createProject: (projectData: Partial<ProjectState>) => Promise<ProjectState | null>;
-  updateProject: (id: number, updates: Partial<ProjectState>) => Promise<ProjectState | null>;
+  updateProject: (id: number, updates: Partial<ProjectState>, options?: { silent?: boolean }) => Promise<ProjectState | null>;
   deleteProject: (id: number) => Promise<boolean>;
   moveToPastProject: (id: number) => Promise<boolean>;
   restoreFromPastProject: (id: number) => Promise<boolean>;
@@ -94,6 +98,8 @@ export interface ProjectStore {
   setProjects: (projects: ProjectState[]) => void;
   addProject: (project: ProjectState) => void;
   updateProjectInStore: (id: number, updates: Partial<ProjectState>) => void;
+  optimisticUpdateMaterialStatus: (projectId: number, materialId: number, newStatus: 'pending' | 'in_progress' | 'completed', user?: { id: number; name: string }) => void;
+  setOptimisticUpdating: (updating: boolean) => void;
   removeProject: (id: number) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
@@ -111,6 +117,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   lastUpdated: 0,
   sseListenersSetup: false,
   _sseHandlers: undefined,
+  isOptimisticUpdating: false,
 
   // 获取项目列表
   fetchProjects: async () => {
@@ -295,8 +302,12 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   },
 
   // 更新项目
-  updateProject: async (id, updates) => {
-    set({ loading: true, error: null });
+  updateProject: async (id, updates, options = {}) => {
+    const { silent = false } = options;
+    
+    if (!silent) {
+      set({ loading: true, error: null });
+    }
     
     try {
       const token = getAuthToken();
@@ -325,14 +336,16 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         projects: state.projects.map(p => 
           p.id === id ? { ...p, ...updatedProject } : p
         ),
-        loading: false,
+        loading: silent ? state.loading : false,
         lastUpdated: Date.now()
       }));
       
-      // 通知其他组件更新
-      window.dispatchEvent(new CustomEvent('project-updated', { 
-        detail: { id, updates: updatedProject } 
-      }));
+      // 只有在非静默模式下才通知其他组件更新
+      if (!silent) {
+        window.dispatchEvent(new CustomEvent('project-updated', { 
+          detail: { id, updates: updatedProject } 
+        }));
+      }
       
       return updatedProject;
     } catch (error) {
@@ -526,8 +539,9 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     // 监听项目状态变更事件
     const projectStatusChangedHandler = (data: any) => {
       console.log('🔄 收到项目状态变更事件:', data);
-      if (data.project) {
-        get().updateProjectInStore(data.project.id, data.project);
+      if (data.projectId) {
+        // 更新项目状态
+        get().updateProjectInStore(data.projectId, { status: data.newStatus });
         set({ lastUpdated: Date.now() });
         debouncedRefresh(get().fetchProjects);
       }
@@ -550,26 +564,46 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     const materialStatusChangedHandler = (data: any) => {
       console.log('🔧 收到板材状态变更事件:', data);
       console.log('🔧 当前项目数量:', get().projects.length);
-      if (data.projectId) {
-        set({ lastUpdated: Date.now() });
-        console.log('🔄 触发防抖刷新项目数据...');
-        debouncedRefresh(get().fetchProjects);
+      if (data.projectId && data.material) {
+        // 使用乐观更新而不是全量刷新
+        const { optimisticUpdateMaterialStatus } = get();
         
+        // 直接更新Zustand store中的材料状态
+        optimisticUpdateMaterialStatus(
+          data.projectId, 
+          data.material.id, 
+          data.newStatus,
+          data.updatedBy ? { id: data.updatedBy.id, name: data.updatedBy.name } : undefined
+        );
+        
+        // 如果需要更新项目状态，也使用乐观更新
+        if (data.project && data.project.status !== get().projects.find(p => p.id === data.projectId)?.status) {
+          get().updateProjectInStore(data.projectId, { status: data.project.status });
+        }
+        
+        set({ lastUpdated: Date.now() });
+        
+        console.log('📡 SSE材料状态变更：使用乐观更新，避免全量刷新');
+        
+        // 发送事件通知其他组件（带特殊标记表示来自SSE）
         window.dispatchEvent(new CustomEvent('materials-updated', { 
           detail: { 
             projectId: data.projectId, 
             materialId: data.material?.id,
             oldStatus: data.oldStatus,
-            newStatus: data.newStatus 
+            newStatus: data.newStatus,
+            fromSSE: true, // 标记来自SSE，避免重复处理
+            timestamp: Date.now()
           } 
         }));
-        console.log('📡 已发送 materials-updated 事件');
       }
     };
 
     // 监听批量板材状态变更事件
     const materialBatchStatusChangedHandler = (data: any) => {
       console.log('🔧 收到批量板材状态变更事件:', data);
+      
+      // 批量操作由于复杂性，仍然使用防抖刷新
       set({ lastUpdated: Date.now() });
       debouncedRefresh(get().fetchProjects);
       
@@ -578,7 +612,9 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           batchUpdate: true,
           materialIds: data.materialIds,
           status: data.status,
-          updatedCount: data.updatedCount
+          updatedCount: data.updatedCount,
+          fromSSE: true,
+          timestamp: Date.now()
         } 
       }));
     };
@@ -667,6 +703,46 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     }));
   },
   
+  optimisticUpdateMaterialStatus: (projectId, materialId, newStatus, user) => {
+    console.log('🚀 乐观更新材料状态:', { projectId, materialId, newStatus });
+    const currentTime = new Date().toISOString();
+    
+    set(state => ({
+      projects: state.projects.map(project => {
+        if (project.id === projectId) {
+          return {
+            ...project,
+            materials: project.materials?.map(material => {
+              if (material.id === materialId) {
+                const updatedMaterial = { ...material, status: newStatus };
+                
+                // 根据新状态设置时间和完成人
+                if (newStatus === 'in_progress') {
+                  updatedMaterial.startDate = material.startDate || currentTime;
+                  updatedMaterial.completedDate = undefined;
+                  updatedMaterial.completedBy = undefined;
+                } else if (newStatus === 'completed') {
+                  updatedMaterial.completedDate = currentTime;
+                  updatedMaterial.completedBy = user?.id;
+                  updatedMaterial.startDate = material.startDate || currentTime;
+                } else if (newStatus === 'pending') {
+                  updatedMaterial.startDate = undefined;
+                  updatedMaterial.completedDate = undefined;
+                  updatedMaterial.completedBy = undefined;
+                }
+                
+                return updatedMaterial;
+              }
+              return material;
+            })
+          };
+        }
+        return project;
+      }),
+      lastUpdated: Date.now()
+    }));
+  },
+  
   removeProject: (id) => set(state => ({ 
     projects: state.projects.filter(p => p.id !== id),
     lastUpdated: Date.now()
@@ -674,12 +750,48 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error }),
+  setOptimisticUpdating: (updating) => set({ isOptimisticUpdating: updating }),
 }));
 
 // 添加事件监听器，当材料更新时刷新项目数据
+// 优化：减少频繁的全量刷新
 if (typeof window !== 'undefined') {
-  window.addEventListener('materials-updated', () => {
-    const store = useProjectStore.getState();
-    store.fetchProjects();
+  let refreshTimeout: NodeJS.Timeout | null = null;
+  let lastUpdateTimestamp = 0;
+  
+  window.addEventListener('materials-updated', (event: any) => {
+    const eventDetail = event.detail;
+    const eventTimestamp = eventDetail?.timestamp || Date.now();
+    
+    // 如果事件来自SSE，则跳过处理（因为Store层已经处理了）
+    if (eventDetail?.fromSSE) {
+      console.log('⏭️ Store层跳过SSE事件（已由SSE处理器处理）');
+      return;
+    }
+    
+    // 防止重复处理相同的事件
+    if (eventTimestamp <= lastUpdateTimestamp) {
+      console.log('⏭️ 跳过重复的materials-updated事件');
+      return;
+    }
+    
+    lastUpdateTimestamp = eventTimestamp;
+    
+    // 防抖：避免短时间内多次刷新
+    if (refreshTimeout) {
+      console.log('⏰ 清除之前的刷新定时器');
+      clearTimeout(refreshTimeout);
+    }
+    
+    refreshTimeout = setTimeout(() => {
+      const store = useProjectStore.getState();
+      // 只有在没有正在进行乐观更新时才进行全量刷新
+      if (!store.isOptimisticUpdating) {
+        console.log('📡 Store层收到materials-updated事件，静默同步数据...');
+        store.fetchProjects();
+      } else {
+        console.log('🚀 乐观更新进行中，跳过Store层刷新');
+      }
+    }, 800); // 增加防抖时间到800ms
   });
 }

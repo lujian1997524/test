@@ -486,6 +486,7 @@ router.post('/', authenticate, requireOperator, async (req, res) => {
       startDate, 
       endDate, 
       assignedWorkerId,
+      selectedThicknessSpecs = [],
       createdBy = req.user.id
     } = req.body;
 
@@ -495,18 +496,61 @@ router.post('/', authenticate, requireOperator, async (req, res) => {
       });
     }
 
-    const project = await Project.create({
-      name: name.trim(),
-      description,
-      priority,
-      startDate,
-      endDate,
-      assignedWorkerId,
-      createdBy
+    // 验证厚度规格选择
+    if (selectedThicknessSpecs.length === 0) {
+      return res.status(400).json({
+        error: '请至少选择一种板材厚度'
+      });
+    }
+
+    // 验证厚度规格是否存在
+    const validThicknessSpecs = await ThicknessSpec.findAll({
+      where: {
+        id: selectedThicknessSpecs,
+        isActive: true
+      }
+    });
+
+    if (validThicknessSpecs.length !== selectedThicknessSpecs.length) {
+      return res.status(400).json({
+        error: '部分厚度规格无效或已禁用'
+      });
+    }
+
+    // 使用事务创建项目和材料记录
+    const { sequelize } = require('../utils/database');
+    const result = await sequelize.transaction(async (t) => {
+      // 获取当前最大的排序值，新项目排在最后
+      const maxSortOrder = await Project.max('sortOrder', { transaction: t }) || 0;
+      
+      // 创建项目
+      const project = await Project.create({
+        name: name.trim(),
+        description,
+        priority,
+        startDate,
+        endDate,
+        assignedWorkerId,
+        createdBy,
+        sortOrder: maxSortOrder + 1
+      }, { transaction: t });
+
+      // 为每个选中的厚度规格创建材料记录
+      const materialPromises = selectedThicknessSpecs.map(thicknessSpecId => 
+        Material.create({
+          projectId: project.id,
+          thicknessSpecId,
+          status: 'pending'
+        }, { transaction: t })
+      );
+
+      await Promise.all(materialPromises);
+
+      return project;
     });
 
     // 获取完整的项目信息返回
-    const newProject = await Project.findByPk(project.id, {
+    const newProject = await Project.findByPk(result.id, {
       include: [
         {
           association: 'creator',
@@ -515,6 +559,10 @@ router.post('/', authenticate, requireOperator, async (req, res) => {
         {
           association: 'assignedWorker',
           attributes: ['id', 'name']
+        },
+        {
+          association: 'materials',
+          include: ['thicknessSpec']
         }
       ]
     });
@@ -522,13 +570,13 @@ router.post('/', authenticate, requireOperator, async (req, res) => {
     // 记录操作历史
     try {
       await recordProjectCreate(
-        project.id,
+        result.id,
         {
-          name: project.name,
-          description: project.description,
-          status: project.status,
-          priority: project.priority,
-          assignedWorkerId: project.assignedWorkerId
+          name: result.name,
+          description: result.description,
+          status: result.status,
+          priority: result.priority,
+          assignedWorkerId: result.assignedWorkerId
         },
         req.user.id,
         req.user.name

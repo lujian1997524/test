@@ -383,13 +383,15 @@ export const UnifiedWorkersSidebar: React.FC<UnifiedWorkersSidebarProps> = ({
                             </Button>
 
                             {/* 管理员操作按钮 - 仅部门项目显示 */}
-                            {isAdmin && item.department && (
+                            {isAdmin && 'department' in item && item.department && (
                               <div className="absolute right-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <div className="flex space-x-1">
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      openEditModal(item.department!);
+                                      if ('department' in item && item.department) {
+                                        openEditModal(item.department);
+                                      }
                                     }}
                                     className="p-1 rounded hover:bg-blue-100 text-blue-600"
                                   >
@@ -398,7 +400,9 @@ export const UnifiedWorkersSidebar: React.FC<UnifiedWorkersSidebarProps> = ({
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleDeleteDepartment(item.department!);
+                                      if ('department' in item && item.department) {
+                                        handleDeleteDepartment(item.department);
+                                      }
                                     }}
                                     className="p-1 rounded hover:bg-red-100 text-red-600"
                                   >

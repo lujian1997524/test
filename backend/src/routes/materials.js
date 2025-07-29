@@ -176,7 +176,7 @@ router.put('/:id', authenticate, requireOperator, async (req, res) => {
         },
         {
           association: 'project',
-          attributes: ['name']
+          attributes: ['id', 'name', 'status']
         }
       ]
     });
@@ -195,8 +195,14 @@ router.put('/:id', authenticate, requireOperator, async (req, res) => {
         if (completedBy) {
           updateData.completedBy = completedBy;
         }
+      } else {
+        // 如果状态不是completed，清除完成相关字段
+        updateData.completedDate = null;
+        updateData.completedBy = null;
       }
     }
+    // 允许显式设置completedBy和completedDate（包括null值）
+    if (completedBy !== undefined) updateData.completedBy = completedBy;
     if (notes !== undefined) updateData.notes = notes;
     if (startDate !== undefined) updateData.startDate = startDate;
     if (completedDate !== undefined) updateData.completedDate = completedDate;
@@ -222,6 +228,60 @@ router.put('/:id', authenticate, requireOperator, async (req, res) => {
     }
 
     await material.update(updateData);
+
+    // 检查并更新项目状态
+    if (status && status !== material.status) {
+      const projectId = material.projectId;
+      const project = material.project;
+      const oldMaterialStatus = material.status; // 保存原始状态用于通知
+      
+      // 获取项目所有材料的状态（包括刚更新的材料）
+      const allProjectMaterials = await Material.findAll({
+        where: { projectId },
+        attributes: ['status']
+      });
+
+      const materialStatuses = allProjectMaterials.map(m => m.status);
+      const oldProjectStatus = project.status;
+      let newProjectStatus = oldProjectStatus;
+
+      // 项目状态判断逻辑
+      const allCompleted = materialStatuses.every(s => s === 'completed');
+      const hasInProgress = materialStatuses.some(s => s === 'in_progress');
+      const allPending = materialStatuses.every(s => s === 'pending');
+
+      if (allCompleted) {
+        newProjectStatus = 'completed';
+      } else if (hasInProgress || (!allPending && !allCompleted)) {
+        newProjectStatus = 'in_progress';
+      } else if (allPending) {
+        newProjectStatus = 'pending';
+      }
+
+      // 如果项目状态需要更新
+      if (newProjectStatus !== oldProjectStatus) {
+        await Project.update({ status: newProjectStatus }, { where: { id: projectId } });
+        
+        console.log(`项目状态自动更新: ${project.name} ${oldProjectStatus} → ${newProjectStatus}`);
+
+        // 发送项目状态变更通知（SSE事件）
+        sseManager.broadcast('project-status-changed', {
+          projectId,
+          projectName: project.name,
+          oldStatus: oldProjectStatus,
+          newStatus: newProjectStatus,
+          changedBy: req.user.name,
+          changedById: req.user.id,
+          reason: '材料状态变更导致',
+          materialChanged: {
+            materialId: material.id,
+            thicknessSpec: material.thicknessSpec?.thickness + material.thicknessSpec?.unit,
+            oldStatus: oldMaterialStatus,
+            newStatus: status
+          }
+        }, req.user.id);
+      }
+    }
 
     // 获取更新后的完整信息
     const updatedMaterial = await Material.findByPk(id, {

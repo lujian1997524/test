@@ -77,7 +77,7 @@ class NotificationManager {
     if (this.permission !== 'granted') {
       const permission = await this.requestPermission();
       if (permission !== 'granted') {
-        console.warn('通知权限被拒绝');
+        console.log('桌面通知权限未授予，将只显示应用内通知');
         return null;
       }
     }

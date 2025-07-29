@@ -7,8 +7,8 @@ import { Drawing } from './DrawingLibrary';
 
 export interface DrawingGridProps {
   drawings: Drawing[];
-  selectedDrawings: number[];
-  onSelectionChange: (selectedIds: number[]) => void;
+  selectedDrawings?: number[];
+  onSelectionChange?: (selectedIds: number[]) => void;
   onDelete: (drawing: Drawing) => void;
   onEdit: (drawing: Drawing) => void;
   onPreview: (drawing: Drawing) => void;
@@ -18,7 +18,7 @@ export interface DrawingGridProps {
 
 export const DrawingGrid: React.FC<DrawingGridProps> = ({
   drawings,
-  selectedDrawings,
+  selectedDrawings = [],
   onSelectionChange,
   onDelete,
   onEdit,
@@ -28,6 +28,8 @@ export const DrawingGrid: React.FC<DrawingGridProps> = ({
 }) => {
   // 处理单个图纸选择
   const handleDrawingSelect = (drawingId: number, selected: boolean) => {
+    if (!onSelectionChange) return;
+    
     if (selected) {
       onSelectionChange([...selectedDrawings, drawingId]);
     } else {
@@ -83,7 +85,7 @@ export const DrawingGrid: React.FC<DrawingGridProps> = ({
               <DrawingCard
                 drawing={drawing}
                 selected={selectedDrawings.includes(drawing.id)}
-                onSelect={(selected) => handleDrawingSelect(drawing.id, selected)}
+                onSelect={onSelectionChange ? (selected) => handleDrawingSelect(drawing.id, selected) : undefined}
                 onDelete={() => onDelete(drawing)}
                 onEdit={() => onEdit(drawing)}
                 onPreview={() => onPreview(drawing)}

@@ -119,3 +119,6 @@ export type { ListProps, ListItemProps, ListGroupProps, ListActionProps, ListCon
 
 export { Navigation, NavigationItem, NavigationGroup, NavigationDivider, TabNavigation } from './Navigation'
 export type { NavigationProps, NavigationItemProps, NavigationGroupProps, NavigationDividerProps, TabNavigationProps } from './Navigation'
+
+export { default as BatchSortModal } from './BatchSortModal'
+export { MaterialManagementModal } from './MaterialManagementModal'

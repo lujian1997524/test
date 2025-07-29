@@ -27,13 +27,15 @@ interface PastProjectsTreeProps {
   selectedProjectId: number | null;
   onRefresh?: () => void;
   className?: string;
+  onMobileItemClick?: () => void;
 }
 
 export const PastProjectsTree: React.FC<PastProjectsTreeProps> = ({
   onProjectSelect,
   selectedProjectId,
   onRefresh,
-  className = ''
+  className = '',
+  onMobileItemClick
 }) => {
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const { user } = useAuth();
@@ -212,7 +214,10 @@ export const PastProjectsTree: React.FC<PastProjectsTreeProps> = ({
                             <motion.button
                               key={project.id}
                               whileHover={{ backgroundColor: 'rgba(59, 130, 246, 0.05)' }}
-                              onClick={() => onProjectSelect(project.id)}
+                              onClick={() => {
+                                onProjectSelect(project.id);
+                                onMobileItemClick?.(); // 通知移动端关闭侧边栏
+                              }}
                               className={`w-full flex items-center justify-between p-3 text-left transition-colors border-b border-gray-100 last:border-b-0 ${
                                 selectedProjectId === project.id
                                   ? 'bg-blue-50 border-l-4 border-l-blue-500'

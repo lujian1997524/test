@@ -418,7 +418,7 @@ export const WorkerManagement: React.FC<WorkerManagementProps> = ({
                 </div>
 
                 {/* 该部门的工人列表 */}
-                <div className="overflow-x-auto">
+                <div className="hidden md:block overflow-x-auto">
                   <Table className="w-full">
                     <TableHeader className="bg-macos15-control/10">
                       <TableRow>
@@ -483,6 +483,75 @@ export const WorkerManagement: React.FC<WorkerManagementProps> = ({
                       </AnimatePresence>
                     </TableBody>
                   </Table>
+                </div>
+
+                {/* 移动端工人卡片布局 */}
+                <div className="md:hidden space-y-3 p-4">
+                  <AnimatePresence>
+                    {deptWorkers.map((worker, index) => (
+                      <motion.div
+                        key={worker.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={{ duration: 0.3, delay: index * 0.1 }}
+                        className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm"
+                      >
+                        {/* 工人基本信息 */}
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1">
+                            <h4 className="font-medium text-text-primary text-lg">{worker.name}</h4>
+                            <div className="flex items-center mt-1 text-text-secondary text-sm">
+                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21L6.964 11.1a13.651 13.651 0 004.236 4.236l1.713-3.26a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                              </svg>
+                              {worker.phone}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 项目信息和操作 */}
+                        <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleJumpToProjects(worker.name)}
+                            className="inline-flex items-center px-3 py-2 bg-ios18-blue/10 text-ios18-blue rounded-lg text-sm font-medium hover:bg-ios18-blue/20 transition-colors"
+                          >
+                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
+                            {worker.projectCount || 0} 个项目
+                          </Button>
+                          
+                          {isAdmin && (
+                            <div className="flex space-x-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openEditModal(worker)}
+                                className="px-3 py-2"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                              </Button>
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                onClick={() => handleDelete(worker.id, worker.name)}
+                                className="px-3 py-2"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
                 </div>
               </motion.div>
             ))}
