@@ -23,20 +23,29 @@ jobs:
     - name: 安装 Rust
       uses: dtolnay/rust-toolchain@stable
 
+    - name: 进入项目目录
+      run: cd frontend-vue
+
     - name: 安装前端依赖
-      run: npm install
+      run: |
+        cd frontend-vue
+        npm install
 
     - name: 构建前端
-      run: npm run build
+      run: |
+        cd frontend-vue
+        npm run build
 
     - name: 安装 Tauri CLI
       run: npm install -g @tauri-apps/cli@2.7.1
 
     - name: 构建 Windows 应用程序
-      run: npx @tauri-apps/cli build
+      run: |
+        cd frontend-vue
+        npx @tauri-apps/cli build
 
     - name: 上传构建产物
       uses: actions/upload-artifact@v4
       with:
         name: windows-app
-        path: src-tauri/target/release/bundle/
+        path: frontend-vue/src-tauri/target/release/bundle/
