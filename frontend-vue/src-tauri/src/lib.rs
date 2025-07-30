@@ -1,0 +1,1 @@
+// Tauri doesn't have a Window Manager, so we expose this function instead

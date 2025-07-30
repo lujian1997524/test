@@ -1,0 +1,364 @@
+import { configManager } from './configManager.ts'
+
+// SSE事件类型
+export type SSEEventType = 
+  | 'connected'
+  | 'heartbeat'
+  | 'project-created'
+  | 'project-updated'
+  | 'project-deleted'
+  | 'project-status-changed'
+  | 'project-restored' 
+  | 'project-soft-deleted'
+  | 'project-moved-to-past'
+  | 'project-restored-from-past'
+  | 'projects-batch-restored'
+  | 'projects-batch-soft-deleted'
+  | 'projects-batch-destroyed'
+  | 'material-status-changed'
+  | 'material-batch-status-changed'
+  | 'test';
+
+// SSE事件数据接口
+export interface SSEEventData {
+  type: SSEEventType;
+  data: any;
+  timestamp: string;
+}
+
+// 消息通知接口
+export interface NotificationMessage {
+  id: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  title: string;
+  message: string;
+  timestamp: string;
+  duration?: number; // 显示时长（毫秒），0表示不自动消失
+  onClick?: () => void;
+}
+
+// SSE连接管理器
+class SSEManager {
+  private eventSource: EventSource | null = null;
+  private reconnectTimer: number | null = null
+  private maxReconnectAttempts = 5;
+  private reconnectAttempts = 0;
+  private reconnectInterval = 3000; // 3秒
+  private isManuallyDisconnected = false;
+  private currentToken: string | null = null; // 保存当前token用于重连
+  private listeners: Map<SSEEventType, Set<(data: any) => void>> = new Map();
+  private notificationCallbacks: Set<(notification: NotificationMessage) => void> = new Set();
+  private recentEvents: Set<string> = new Set(); // 用于去重的最近事件集合
+
+  constructor() {
+    // 绑定方法上下文
+    this.handleMessage = this.handleMessage.bind(this);
+    this.handleError = this.handleError.bind(this);
+    this.handleOpen = this.handleOpen.bind(this);
+  }
+
+  // 获取SSE连接URL
+  private getSSEUrl(token: string): string {
+    // 统一使用完整的后端地址
+    return `http://110.40.71.83:35001/api/sse/connect?token=${encodeURIComponent(token)}`
+  }
+
+  // 连接到SSE服务
+  connect(token: string): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+      // 检查是否启用SSE功能
+      const config = configManager.getConfig();
+      if (!config.features.enableSSE) {
+        resolve(false);
+        return;
+      }
+
+      if (this.eventSource) {
+        this.disconnect();
+      }
+
+      this.isManuallyDisconnected = false;
+      this.currentToken = token; // 保存token用于重连
+
+      try {
+        // 创建EventSource连接，将token作为查询参数传递
+        const sseUrl = this.getSSEUrl(token);
+        this.eventSource = new EventSource(sseUrl);
+
+        // 设置事件监听器
+        this.eventSource.onopen = (event) => {
+          this.handleOpen(event);
+          resolve(true);
+        };
+
+        this.eventSource.onerror = (event) => {
+          this.handleError(event);
+          if (this.reconnectAttempts === 0) {
+            reject(new Error('SSE连接失败'));
+          }
+        };
+
+        // 监听所有SSE事件类型
+        const eventTypes: SSEEventType[] = [
+          'connected', 'heartbeat', 'project-created', 'project-updated', 
+          'project-deleted', 'project-status-changed',
+          'project-restored', 'project-soft-deleted', 'project-moved-to-past',
+          'project-restored-from-past', 'projects-batch-restored',
+          'projects-batch-soft-deleted', 'projects-batch-destroyed',
+          'material-status-changed', 'material-batch-status-changed', 'test'
+        ];
+
+        eventTypes.forEach(eventType => {
+          this.eventSource?.addEventListener(eventType, (event) => {
+            this.handleMessage(event as MessageEvent, eventType);
+          });
+        });
+
+        // 使用配置中的API超时设置
+        setTimeout(() => {
+          if (this.eventSource?.readyState !== EventSource.OPEN) {
+            this.eventSource?.close();
+            reject(new Error('SSE连接超时'));
+          }
+        }, config.apiTimeout || 10000);
+
+      } catch (error) {
+        console.error('创建SSE连接失败:', error);
+        reject(error);
+      }
+    });
+  }
+
+  // 断开SSE连接
+  disconnect() {
+    this.isManuallyDisconnected = true;
+    this.currentToken = null; // 清空保存的token
+    
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
+    if (this.eventSource) {
+      this.eventSource.close();
+      this.eventSource = null;
+    }
+
+    this.reconnectAttempts = 0;
+  }
+
+  // 处理连接打开
+  private handleOpen(event: Event) {
+    this.reconnectAttempts = 0;
+    
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+  }
+
+  // 处理接收到的消息
+  private handleMessage(event: MessageEvent, eventType: SSEEventType) {
+    try {
+      const eventData: SSEEventData = JSON.parse(event.data);
+
+      // 生成事件唯一标识符用于去重（使用事件类型+时间戳+数据的关键字段）
+      let eventId: string;
+      if (eventType === 'project-status-changed') {
+        if (eventData.data.projectId) {
+          eventId = `${eventType}-${eventData.data.projectId}-${eventData.timestamp}`;
+        } else if (eventData.data.project?.id) {
+          eventId = `${eventType}-${eventData.data.project.id}-${eventData.timestamp}`;
+        } else {
+          eventId = `${eventType}-${eventData.timestamp}`;
+        }
+      } else if (eventType === 'project-created' && eventData.data.project) {
+        eventId = `${eventType}-${eventData.data.project.id}-${eventData.timestamp}`;
+      } else if (eventType === 'project-deleted') {
+        eventId = `${eventType}-${eventData.data.projectId}-${eventData.timestamp}`;
+      } else {
+        eventId = `${eventType}-${eventData.timestamp}`;
+      }
+      
+      if (this.recentEvents.has(eventId)) {
+        return;
+      }
+
+      // 将事件添加到最近事件集合，并设置过期清理
+      this.recentEvents.add(eventId);
+      setTimeout(() => {
+        this.recentEvents.delete(eventId);
+      }, 5000); // 5秒后清理，防止短时间内的重复事件
+
+      // 触发对应类型的监听器
+      const listeners = this.listeners.get(eventType);
+      if (listeners) {
+        listeners.forEach(callback => {
+          try {
+            callback(eventData.data);
+          } catch (error) {
+            console.error(`SSE事件监听器执行失败 (${eventType}):`, error);
+          }
+        });
+      }
+
+      // 处理项目相关事件的通知（板材事件不显示通知）
+      if (eventType.startsWith('project-')) {
+        this.handleProjectNotification(eventType, eventData.data);
+      }
+
+    } catch (error) {
+      console.error('解析SSE消息失败:', error, event.data);
+    }
+  }
+
+  // 处理项目通知
+  private handleProjectNotification(eventType: SSEEventType, data: any) {
+    let notification: NotificationMessage | null = null;
+    const timestamp = Date.now();
+
+    switch (eventType) {
+      case 'project-created':
+        notification = {
+          id: `project-created-${data.project?.id}-${timestamp}`,
+          type: 'info',
+          title: '新项目创建',
+          message: `${data.userName || '某用户'} 创建了项目 "${data.project?.name || '未知项目'}"`,
+          timestamp: new Date().toISOString(),
+          duration: 5000
+        };
+        break;
+
+      case 'project-status-changed':
+        const statusText = this.getStatusText(data.newStatus);
+        const reasonText = data.reason ? ` (${data.reason})` : '';
+        const materialInfo = data.materialChanged 
+          ? ` - ${data.materialChanged.thicknessSpec} 从${this.getStatusText(data.materialChanged.oldStatus)}改为${this.getStatusText(data.materialChanged.newStatus)}`
+          : '';
+        
+        // 从项目对象或直接字段获取项目名称
+        const projectName = data.project?.name || data.projectName || '未知项目';
+        
+        notification = {
+          id: `project-status-${data.projectId}-${timestamp}`,
+          type: data.newStatus === 'completed' ? 'success' : 'info',
+          title: '项目状态自动更新',
+          message: `项目 "${projectName}" 状态从${this.getStatusText(data.oldStatus)}改为${statusText}${reasonText}${materialInfo}`,
+          timestamp: new Date().toISOString(),
+          duration: 6000 // 增加显示时间，因为信息更详细
+        };
+        break;
+
+      case 'project-deleted':
+        const drawingText = data.deletedDrawingsCount && data.deletedDrawingsCount > 0
+          ? ` (同时删除了 ${data.deletedDrawingsCount} 个图纸)`
+          : '';
+        
+        // 从项目对象或直接字段获取项目名称
+        const deletedProjectName = data.project?.name || data.projectName || '未知项目';
+        
+        notification = {
+          id: `project-deleted-${data.projectId}-${timestamp}`,
+          type: 'warning',
+          title: '项目已删除',
+          message: `${data.userName || '某用户'} 删除了项目 "${deletedProjectName}"${drawingText}`,
+          timestamp: new Date().toISOString(),
+          duration: 8000 // 增加显示时间，因为信息更丰富
+        };
+        break;
+    }
+
+    if (notification) {
+      this.showNotification(notification);
+    }
+  }
+
+  // 显示通知
+  private showNotification(notification: NotificationMessage) {
+    this.notificationCallbacks.forEach(callback => {
+      try {
+        callback(notification);
+      } catch (error) {
+        console.error('通知回调执行失败:', error);
+      }
+    });
+  }
+
+  // 获取状态文本
+  private getStatusText(status: string): string {
+    switch (status) {
+      case 'pending': return '待处理';
+      case 'in_progress': return '进行中';
+      case 'completed': return '已完成';
+      case 'cancelled': return '已取消';
+      default: return status;
+    }
+  }
+
+  // 处理连接错误
+  private handleError(event: Event) {
+    // 如果是手动断开，不进行重连
+    if (this.isManuallyDisconnected) {
+      return;
+    }
+
+    // 达到最大重连次数
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      return;
+    }
+
+    // 开始重连
+    this.reconnectAttempts++;
+    const delay = this.reconnectInterval * this.reconnectAttempts;
+    
+    this.reconnectTimer = setTimeout(() => {
+      if (!this.isManuallyDisconnected && this.currentToken) {
+        this.connect(this.currentToken).catch(() => {
+          // 重连失败，不需要特殊处理
+        });
+      }
+    }, delay);
+  }
+
+  // 添加事件监听器
+  addEventListener(eventType: SSEEventType, callback: (data: any) => void) {
+    if (!this.listeners.has(eventType)) {
+      this.listeners.set(eventType, new Set());
+    }
+    this.listeners.get(eventType)!.add(callback);
+  }
+
+  // 移除事件监听器
+  removeEventListener(eventType: SSEEventType, callback: (data: any) => void) {
+    const listeners = this.listeners.get(eventType);
+    if (listeners) {
+      listeners.delete(callback);
+      if (listeners.size === 0) {
+        this.listeners.delete(eventType);
+      }
+    }
+  }
+
+  // 添加通知回调
+  addNotificationCallback(callback: (notification: NotificationMessage) => void) {
+    this.notificationCallbacks.add(callback);
+  }
+
+  // 移除通知回调
+  removeNotificationCallback(callback: (notification: NotificationMessage) => void) {
+    this.notificationCallbacks.delete(callback);
+  }
+
+  // 获取连接状态
+  getConnectionState(): number {
+    return this.eventSource?.readyState ?? EventSource.CLOSED;
+  }
+
+  // 检查是否已连接
+  isConnected(): boolean {
+    return this.eventSource?.readyState === EventSource.OPEN;
+  }
+}
+
+// 创建全局SSE管理器实例
+export const sseManager = new SSEManager();

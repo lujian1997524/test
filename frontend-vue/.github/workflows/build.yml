@@ -1,0 +1,42 @@
+name: 构建 Windows 桌面应用
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: 安装 Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: 安装 Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: 安装前端依赖
+      run: npm install
+
+    - name: 构建前端
+      run: npm run build
+
+    - name: 安装 Tauri CLI
+      run: npm install -g @tauri-apps/cli@2.7.1
+
+    - name: 构建 Windows 应用程序
+      run: npx @tauri-apps/cli build
+
+    - name: 上传构建产物
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-app
+        path: src-tauri/target/release/bundle/
